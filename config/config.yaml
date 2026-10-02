@@ -1,0 +1,772 @@
+# Configuração do Scorecard DN (pipeline único `run_dn.py`).
+# Toda regra de negócio declarada aqui vem de decisão registrada em docs/ (mapeamento.md §5,
+# rodada_2026-09-09.md e a reforma de 09/09/2026 — docs/reforma_fase1.md).
+# Caminhos relativos são resolvidos a partir da raiz do projeto (a pasta DN/); absolutos passam direto.
+
+projeto:
+  nome: Scorecard DN · Distribuição Numérica
+  pasta_dados: data/dn          # staging/, curated/, quality/ ficam aqui
+  pasta_logs: data/dn/logs
+  # Etapa 1 · performance (P6, 15/09/2026): o JSON (35 MB) e o HTML datado (15 MB) de cada execução são gerados numa pasta
+  # LOCAL, fora do OneDrive; só o HTML publicado vai para a pasta sincronizada (publicacao.pasta). Aceita variáveis de
+  # ambiente (%LOCALAPPDATA%). null = data/dn/painel (comportamento anterior, dentro do OneDrive).
+  pasta_painel: "%LOCALAPPDATA%/Dori/DN/painel"
+
+logs:
+  manter_ultimos: 30            # logs e resumos de execução mantidos
+
+recursos:                       # Etapa 1 · performance (P6): convivência com a máquina; não muda nenhum número
+  prioridade: abaixo_do_normal  # normal | abaixo_do_normal | baixa — prioridade do processo no Windows (Excel, navegador e
+                                # OneDrive recebem CPU primeiro enquanto o pipeline roda)
+  threads: 4                    # threads do pyarrow (leitura/gravação de Parquet) e das bibliotecas numéricas; 0 = padrão
+                                # da biblioteca (todos os núcleos; a máquina tem 12)
+
+calendario:
+  fiscal_mes_inicio: 9          # ano fiscal Dori: setembro a agosto (rodada 2)
+  fiscal_prefixo: "FY"
+  meses_abrev: [jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez]   # rótulos "mmm/aa" do painel (D6)
+  # F0 (10/09/2026, evolução): inertes até a fase F5 — RN-23, RN-24 (docs/regras_negocio.md)
+  perspectiva_padrao: fiscal                        # RN-24 (A.10/D29): fiscal | civil
+  rotulo_fiscal_longo: "Ano fiscal {ano} ({inicio}–{fim})"   # RN-23 (A.10/D4): ex. "Ano fiscal 2026 (set/25–ago/26)"
+  rotulo_fiscal_curto: "FY{aa}"                     # RN-23: ex. "FY26"
+  # F5 (10/09/2026): rotulos do ano civil, no mesmo molde; {inicio}/{fim} = periodo coberto pelo acumulado
+  rotulo_civil_longo: "Ano {ano} ({inicio}–{fim})"  # ex. "Ano 2026 (jan/26–ago/26)"
+  rotulo_civil_curto: "{ano}"                       # ex. "2026"
+
+fontes:
+  sellout:                      # Mtrix · sell-through por distribuidor × PDV × SKU × mês
+    pasta: "bases/Sell Out - MTRIX"
+    padroes_aceitos: ["ScoreCard_Mtrix_*.xlsx"]
+    aba: Sheet1
+    # Arquivos que existem na pasta mas NÃO entram, com o motivo (rodada 5, 08/09/2026).
+    # 09/09/2026: jul/26 foi reextraído e voltou para a carga; a lista está vazia.
+    # 02/10/2026 (Douglas, opção A): out/26 fora até chegar extração maior — 467 linhas, 7 distribuidores; 7 linhas
+    # "VENDAS A VISTA" da ARRUDA (PDV 00000000000000001) = 1,5% > pdv_outro_max_pct. Tirar daqui quando o arquivo crescer.
+    arquivos_ignorados:
+      "ScoreCard_Mtrix_10.2026.xlsx": "extração de 02/10/2026 com 7 distribuidores; fora até chegar extração maior (Douglas, 02/10/2026)"
+    colunas_obrigatorias:
+      - "CNPJ do AD."
+      - "Agente de Distribuição"
+      - "CNPJ Reduzido"
+      - "Cód. PDV"
+      - "Razão Social PDV"
+      - "UF PDV"
+      - "Cidade PDV"
+      - "Segmento do PDV"
+      - "SKU"
+      - "Ano/Mês"
+      - "# Sell-Out (R$)"
+      - "# Sell-Out (Und)"
+      - "# Sell-Out (Quilos)"
+      - "# Total SKUs"
+      - "# Frequência de compra"                # RN-58 (13/09/2026): atendimentos (NFs) por linha; o total do arquivo calibra a estimativa
+    # 13/09/2026 (Etapa 1 da frequência, R4): "# PDVs Positivados" saiu das extrações de set/25 em diante; só serve ao aviso
+    # informativo "PDVs distintos x total da Mtrix", que roda apenas nos arquivos que ainda a trazem.
+    colunas_opcionais: ["Endereço PDV", "Bairro PDV", "CEP PDV", "# PDVs Positivados"]
+
+  # 02/10/2026 (Douglas): Produtos e RTM passaram para a pasta compartilhada com o Gerencial (uma cópia só; antes cada
+  # projeto tinha a sua). Produtos idêntico byte a byte; RTM = a versão do DN (a do Gerencial não tinha a coluna CNPJ e
+  # dava o mesmo resultado nas 4 colunas comuns).
+  produtos:                     # cadastro SKU -> categoria (a categoria da DN vem daqui, rodada 2)
+    arquivo: "../../bases compartilhadas/Produtos.xlsx"
+    aba: Produtos
+    colunas_obrigatorias: ["Código Produto", "Descrição Produto", "Categoria"]
+
+  # 02/10/2026 (Douglas): CADASTRO ÚNICO de distribuidores, na pasta compartilhada com o Gerencial (que lê dele o nome
+  # do destino do RTM pelo código; a tela do Gerencial segue com a bandeira do BI). "Supervisor" deixou de ser
+  # obrigatória: estava vazia nas 81 linhas e o supervisor vem só da Hierarquia.
+  distribuidores:               # ponte CNPJ do distribuidor <-> código interno <-> nome reduzido (rodada 3)
+    arquivo: "../../bases compartilhadas/Distribuidores_DePara.xlsx"
+    aba: Planilha1
+    colunas_obrigatorias:
+      - "CNPJ DISTRIBUIDOR"
+      - "DESCRIÇÃO DISTRIBUIDOR MTRIX"
+      - "DESCRIÇÃO BI"
+      - "Cód. Interno Cliente"
+      - "Status"
+      - "Distribuidora Nome Reduzido"
+    # C3 (09/09/2026): data de cadastro do distribuidor. OPCIONAL — quando existe, é ela
+    # que define a maturidade (Base atual x Novos); sem ela, a maturidade é inferida do
+    # 1º mês com sell-out na Mtrix (histórico censurado, o painel escreve "≥").
+    # "Supervisor" (opcional desde 02/10/2026) só alimenta a coluna SUPERVISOR_DEPARA do relatório de qualidade.
+    colunas_opcionais: ["Data de Cadastro", "Supervisor"]
+
+  # 02/10/2026 (Douglas): a Hierarquia_Consolidada saiu. A hierarquia oficial é a Hierarquia_AAAAMMDD.xlsx da pasta
+  # compartilhada com o Gerencial e o ROTA (1 linha por cliente, N1–N4). Vale o arquivo de data MAIS RECENTE no nome;
+  # duas datas iguais ou arquivo do padrão sem a data AAAAMMDD válida abortam. Rótulo de cada nível = "código - nome":
+  # o nome é limpo quando termina com "(código)" igual ao código da linha (sai o "(código)" e o "_" inicial; regra única
+  # dos três painéis, R2 de 02/10/2026); fora disso entra como vem.
+  # A Estrutura de Clientes (rede/bandeira) da mesma pasta não é usada no DN (decisão de 02/10/2026); N4 também não.
+  hierarquia:
+    pasta: "../../bases compartilhadas"     # relativo à raiz do projeto (DN/)
+    padrao: "Hierarquia_*.xlsx"
+    data_regex: "^Hierarquia_(\\d{8})\\.xlsx$"
+    aba: "Hierarquia Vendas"
+    coluna_cliente: "Cód. cliente"
+    niveis:                                 # nível -> [coluna do código, coluna do nome]
+      HEAD: ["Cód. Head Vendas (N1)", "Nome Head Vendas (N1)"]
+      GERENTE: ["Cód. Gerente Vendas (N2)", "Nome Gerente Vendas (N2)"]
+      SUPERVISOR: ["Cód. Executivo Vendas (N3)", "Nome Executivo Vendas (N3)"]
+
+  rtm:                          # clientes que eram da Dori e passaram ao distribuidor (rodadas 2, 6 e 7)
+    arquivo: "../../bases compartilhadas/RTM_DePara_Transicao.xlsx"
+    aba: "De-Para RTM"
+    colunas_obrigatorias:
+      - "CNPJ"
+      - "Cód. Cliente [Antigo]"
+      - "Dsitribuidor Nome Reduzido"
+    # Fase 4 (P2): chave do destino por CNPJ da filial, quando a coluna existir na planilha; sem ela, o
+    # destino e casado pelo nome reduzido (e o log lista os nomes que nao casaram).
+    colunas_opcionais: ["CNPJ Distribuidor Destino"]
+
+  clusters:                     # OPCIONAL (C5): de-para Segmento do PDV (Mtrix) -> cluster do painel.
+    arquivo: "bases/Bases para tabelas dimensões/Clusters_DePara.xlsx"   # ausente: o painel usa os segmentos da Mtrix
+    aba: null
+    colunas_obrigatorias: ["SEGMENTO MTRIX", "CLUSTER PAINEL"]
+
+  pdv_ponderada:                # OPCIONAL (RN-56, 11/09/2026): carteira de PDVs ponderados (PRIME / DESTAQUE) da aba Pontos de venda
+    arquivo: "bases/Bases para tabelas dimensões/DE-PARA_Ponderada_Clusters.xlsx"   # ausente: o painel sai sem a carteira
+    aba: "PONDERADA"
+    colunas_obrigatorias: ["CNPJ DISTRIBUIDOR", "DISTRIBUIDOR", "CNPJ PDV", "RAZÃO SOCIAL VAREJO", "CLUSTER"]
+
+regras:
+  positivado: "PESO_KG > 0"                 # rodada 2
+  janela_base_ativa_meses: 6                # rodada 2 · Estabilização A8 (14/09/2026): 5 -> 6, aprovado pelo Douglas
+  segmento_novos_meses: 6                   # Base atual acima de 6 meses de histórico; Novos até 6 (rodada 1)
+  segmento_sem_venda_meses: 3               # 02/10/2026 (Douglas): sem kg > 0 nos últimos 3 meses até o de referência = Sem venda (vale antes da maturidade)
+  distribuidor: "CNPJ de filial"            # rodada 2
+  pdv_multi_distribuidor: "conta em cada distribuidor e uma vez no canal"   # rodada 5
+  distribuidor_excluir_sem_hierarquia: true # rodada 7: distribuidor sem linha na Hierarquia sai do painel (eram 9; com a Hierarquia_20261001, nenhum)
+  # Chave do PDV (rodada 5/6): CNPJ = 14 dígitos; LGPD = id negativo com razão social "LGPD MTX ..." (anonimizado
+  # pela Mtrix, estável entre meses); OUTRO = qualquer outra coisa (consumidor final, código interno do distribuidor).
+  # Todos entram na fato como PDV. OUTRO acima do limite abaixo rejeita o arquivo (sinal de formato quebrado).
+  pdv_chave_lgpd_prefixo: "LGPD"
+  # 10/09/2026 (aprovado pelo Douglas): o ultimo mes da serie pode estar EM ANDAMENTO — a Mtrix
+  # carregou so uma parte do mes corrente e o Douglas acompanha assim mesmo. auto = e parcial
+  # quando o mes de referencia e o mesmo mes da ultima leitura das bases (manifesto); sim/nao
+  # forcam. Mes em andamento: nao aborta por distribuidor ainda sem venda, aparece etiquetado no
+  # painel e (ver publicacao) nao substitui o ultimo mes fechado ja publicado.
+  mes_em_andamento: auto
+  rtm:                                      # reforma 09/09/2026 (A4) — usados na Fase 4 do painel
+    data_migracao: "2026-09-01"             # migração Dori -> distribuidor; a visão "a partir da migração" começa aqui
+    visao_padrao: auto                      # auto = histórico completo enquanto a série não alcança a data_migracao,
+                                            #        depois "a partir da migração" | historico_completo | a_partir_da_migracao
+  # ---- F0 (10/09/2026, evolução do painel): chaves INERTES até a fase que as implementa.
+  # Cada chave cita a regra em docs/regras_negocio.md (RN-nn) e a decisão de origem (Anexo A do
+  # docs/evolucao_etapa1_auditoria.md). Nenhuma chave existente mudou de valor nesta fase.
+  metrica:                                  # RN-06, RN-09, RN-43 (A.4, A.5) — fase F1
+    padrao: t                               # t | rs
+    valor_nome: "Valor do sell-through (R$)"
+    valor_definicao: "venda do distribuidor ao PDV, em R$, conforme reportado à Mtrix (soma com sinal; não é faturamento Dori)"
+    sinais: soma_com_sinal                  # linhas negativas entram com sinal (reconcilia com o total da Mtrix)
+    unidades_no_painel: false               # RN-09 (D3): # Sell-Out (Und) fica na fato, fora da tela
+    formato_cards_rs: "R$ {valor} mi"       # 1 decimal
+    formato_tabela_rs: inteiro_milhar
+    formato_rs_pdv_decimais: 2
+  penetracao:                               # RN-19, RN-27..RN-31, RN-36, RN-45 — fase F6
+    regua_oficial: positivados              # RN-28 (A.2/D23): ÷ positivados do nível; secundária = base_ativa (RN-29)
+    periodo: ultimo_mes_fechado             # RN-27 (A.3/D22)
+    benchmark:                              # RN-30 (A.1/D14–D16, D21)
+      tipo: percentil
+      valor: 75
+      universo: todos_com_sellout_na_categoria
+      minimo_observacoes: 0
+      fixo_por_categoria: true              # RN-45: não recalcula com filtro
+    categorias_foco: [AMENDOIM, GOMAS, GELATINA, REGALIZ]   # RN-19 (A.8/D33): ids de DIM_PRODUTO.CATEGORIA
+    cor_verde_pct: 95                       # RN-36 (A.14/D34): verde quando penetração ≥ 95% do benchmark
+    cor_vermelho_pct: 70                    # RN-36: vermelho quando < 70%
+    # a janela da base elegível é regras.janela_base_ativa_meses (RN-02, RN-41; D28 = uma janela para tudo; 6 meses desde a A8 de 14/09/2026). Sem chave própria.
+  potencial:                                # RN-34, RN-35 (A.7/D25) — fase F6
+    fator: observado                        # kg médio das lojas novas na categoria no 1º mês ÷ kg médio dos compradores
+    janela_fator_meses: 6                   # A8 (14/09/2026): acompanha a base ativa (D28: uma janela para tudo)
+    minimo_lojas_distribuidor: 30           # abaixo disso usa a média do canal, marcado na tabela
+    percentil_corte_outliers: 99
+    rotulo_entrada: "Potencial de entrada"
+    rotulo_regime: "Potencial em regime"
+    aviso: "oportunidade calculada, não previsão"
+  # Refino E1 (13/09/2026, D14): regras.matriz (RN-42) e regras.alavancas (RN-57) removidas junto com as abas e o código
+  carteira:                                 # RN-56 (11/09/2026): validade das linhas da planilha ponderada (Q2–Q5, aprovadas como recomendado)
+    clusters_validos: [DESTAQUE, PRIME]
+    exige_compra_na_serie: true             # Q3: o distribuidor precisa ter vendido (kg > 0) ao PDV em algum mês da série
+    nome_aviso_minimo: 0.5                  # Q4: razão social x nome da Mtrix abaixo disso (palavras em comum ÷ total) = só aviso
+    nome_palavras_ignoradas: [LTDA, SA, S, A, ME, EPP, EIRELI, DE, DA, DO, DOS, DAS, E, CIA, L, EI]
+  hierarquia:                               # RN-15, RN-16 (A.13/D20) — fase F4
+    arquivar_retrato_mensal: true           # curated/historico/DIM_DISTRIBUIDOR_<data>.parquet a cada ingestão
+    aviso: "hierarquia vigente em {data}, aplicada a toda a série"
+  frequencia:                               # RN-58 (13/09/2026, Etapas 1–2 da frequência, decisões 1, 3, 5, 8)
+    # atendimento = 1 NF do distribuidor ao PDV no mês; devolução não conta. A Mtrix entrega a frequência por SKU;
+    # a do par distribuidor x PDV é ESTIMADA pela união proporcional, com alfa calibrado todo mês para que a soma
+    # dos pares (todas as linhas do arquivo) feche com o total de atendimentos da linha de total da Mtrix.
+    regra: uniao_proporcional               # uniao_proporcional (painel) | minimo (maior frequência de SKU do par)
+    populacao: kg_positivo                  # R8: só linhas com kg > 0 entram na estimativa exibida (a calibração usa todas, como o total da Mtrix)
+    alfa_busca_max: 1000                    # teto da busca do alfa (bisseção); acima disso "nenhum alfa fecha" e a execução aborta
+  rtm_destino_chave: codigo                 # 13/09/2026 (decisão 8b): destino = Cód. Cliente [Distribuidor] -> filial no de-para -> nome reduzido do de-para
+
+validacao:
+  tolerancia_receita_reais: 1.0
+  tolerancia_peso_kg: 0.5
+  tolerancia_unidades: 1.0
+  cnpj_distribuidor_digitos: 14
+  pdv_outro_max_pct: 1.0                    # % das linhas do arquivo com chave OUTRO
+  html_max_mb: 20                           # 13/09/2026 (decisão 4): 15, limite confortável; o painel gerado acima disso não é publicado
+                                            # 15/09/2026 (pendência 1, aprovação do Douglas): 15 -> 20. Medido em 14,88 MiB com folga de 0,12; os pacotes
+                                            # mensais crescem (set/24 86 KiB, ago/26 300 KiB) e a janela móvel de 25 meses não estabiliza o arquivo:
+                                            # out/26 estouraria os 15. Sem restrição técnica medida por trás dos 15. Backlog: lista de PDVs em colunas (-1,7 MiB)
+  # RN-58: calibração da frequência. Não calibra = aborta (decisão 6): total x PDVs distintos longe de inteiro, frequência do
+  # total ausente ou nenhum alfa fecha o total. Alfa fora da faixa = só aviso (medido: 1,088 a 1,134 em 24 meses fechados);
+  # mês em andamento não é checado contra a faixa.
+  frequencia_tolerancia_inteiro: 0.000001   # |freq_total x PDVs distintos − inteiro| (medido: ≤ 4,4e-11)
+  frequencia_tolerancia_total: 0.5          # |Σ estimativa dos pares − atendimentos do total| em NFs após a calibração
+  frequencia_alfa_min: 1.05
+  frequencia_alfa_max: 1.20
+
+dimensoes:
+  rotulo_sem_cadastro: "SEM CADASTRO"
+  rotulo_sem_hierarquia: "SEM HIERARQUIA"
+
+painel:
+  mes_referencia: null                      # null = último mês da série; ou "AAAA-MM" (também via `run_dn.py --mes`)
+  # 10/09/2026 (aprovado pelo Douglas): quantos meses a série APARECE no painel (gráficos, tabelas
+  # das séries e evolução do RTM). O cálculo, os cards, a base ativa e o comparativo LY continuam
+  # usando todos os meses da Mtrix — só a exibição é cortada. null = mostra a série inteira.
+  serie_meses_exibidos: 12
+  # Refino E6 (13/09/2026): janela movel do arquivo — so os ultimos N meses da serie vao para o painel (seletor de mes, series dos
+  # graficos, pacotes por mes). O calculo continua usando todos os meses (base ativa, LY, acumulados). Mantem o HTML estavel.
+  janela_arquivo_meses: 25
+  # 13/09/2026 (RN-59, decisão 6 da Etapa 1 e 8 da Etapa 2): seletor "Período" em todas as abas com série mensal. A série INTEIRA
+  # vai embutida (compacta) e o navegador só escolhe os pontos: Últimos N meses (padrão = serie_meses_exibidos) · Série completa ·
+  # cada ano do calendário ativo (fiscal ou civil). Nada é recalculado no navegador. No RTM age só na visão "histórico completo".
+  periodo:
+    ativo: true
+    rotulo: "Período"
+    rotulo_ultimos: "Últimos {n} meses"
+    rotulo_tudo: "Série completa"
+    nota: ""                                # Refino E1 (D23): sem nota explicativa na barra
+  # (Fase 3) a tabela de PDVs é montada pelo componente a partir da lista completa embutida (gzip+base64,
+  # decisão A3): amostra, busca e ordenação valem sobre toda a base ativa; não há mais "top N por distribuidor".
+  rotulos:                                  # textos que o painel exibe (D5/D6): nada disso fica em código
+    canal: "CANAL DISTRIBUIÇÃO"
+    categoria_todas: "Todas as categorias"   # rótulo da linha sem recorte de categoria (tabela de distribuidores)
+    metrica_t: "Volume · t"                  # F1 (RN-43): chips do seletor de métrica
+    metrica_rs: "Valor · R$"
+    graf_pdv: "PDVs positivados"             # F2 (RN-47): chip da chave do gráfico (o outro chip usa metrica_t / metrica_rs)
+    graf_freq: "Frequência (estimativa)"     # RN-58 (decisões 3 e 7): terceira chave do gráfico · Refino E1 (D17): sinalizada como estimativa
+    frequencia: "Frequência de compra (estimativa)"   # RN-58 (decisão 7): card e títulos · Refino E1 (D17)
+    frequencia_col: "Freq. compra (est.)"    # RN-58: cabeçalho da coluna nas tabelas · Refino E1 (D17)
+    # 22/09/2026 (Douglas): rótulo frequencia_pdv ("NFs mín. no mês") removido — a coluna saiu da tabela de PDVs e nf_min do blob
+    evo_todas: "todas"                       # F3 (RN-46): botões da evolução por categoria
+    evo_foco: "só as foco"
+    evo_total: "Total do canal"
+    supervisor_todos: "Todos os supervisores"   # F4 (RN-44): primeira opção do select de supervisor
+    cal_fiscal: "Ano fiscal"                 # F5 (RN-24): chips do toggle de calendário
+    cal_civil: "Ano Calendário"              # Refino E1 (D9): era "Ano civil"
+    acum_ano: "Acumulado no ano"             # F5 (RN-25): linha da Visão geral e bloco da Evolução
+    acum_col: "Acum. no ano"                 # F5: cabeçalho da coluna nas tabelas
+    pen_todas: "Todas as 10 categorias"      # F6 (RN-19): linha abaixo dos cards das foco
+    pen_ativar: "A ativar (janela)"          # F7 (RN-32): bloco e coluna
+    pen_sem_compra: "Sem compra no mês"      # F7 (RN-33): oportunidade de recorrência
+    pdv_novo: "Novo na janela"               # F7 (A.6): coluna da tabela de PDVs (PRIMEIRO_MES dentro da janela)
+    pdv_sit_ativar: "A ativar em {cat}"      # F7 (RN-38): situações por categoria no select da tabela de PDVs
+    pdv_sit_sem_mes: "Compram {cat} na janela, sem compra no mês"
+    pdv_sit_mes: "Compram {cat} no mês"
+    pdv_sit_pos_sem: "Positivados no mês sem {cat}"   # F8: situação no select da tabela de PDVs (comprou do distribuidor no mês, não a categoria)
+    lateral_titulo: "Filtros"                 # Refino E2 (D10-D13): barra lateral, Limpar e Voltar
+    lateral_recolher: "Recolher filtros"
+    lateral_expandir: "Expandir filtros"
+    lateral_limpar: "Limpar filtros"
+    lateral_voltar: "Voltar"
+    lateral_parcial: "parcial"                # etiqueta do mês na linha de filtros ativos quando o mês está em andamento
+    lateral_mes: "Mês"                        # Refino E4a (D2): seletor de mês da lateral
+    carregando: "carregando os dados do painel…"   # Refino E4a (D22): enquanto as tabelas comprimidas são abertas
+    pdv_mes_nota: "Lista de PDVs de {mes}: a lista só existe para o mês parcial e o mês fechado"   # Refino E4b
+    per_rotulo: "Período"                     # Refino E5 (D8, D26): seletor de período unificado
+    per_mes: "Mês"
+    per_acum: "Acumulado do ano"
+    per_ano: "Ano"
+    per_serie_completa: "Série completa"
+    per_card_pdvs: "PDVs distintos no período"
+    per_card_vol: "Volume acumulado"
+    per_card_rs: "Valor acumulado"
+    per_card_freq: "Frequência de compra acumulada (estimativa)"
+    per_mr_titulo: "O que aconteceu no período"
+    per_ate: "até"
+    per_doze: "12 meses até"
+    per_acumulado: "Acumulado"
+    per_ano_em_curso: "{ano} · em curso"       # Estabilização A5 (14/09/2026, D26 revista): ano que contém o último mês da série
+    mr_titulo: "O que aconteceu no mês"       # Refino E3 (D7): bloco da Visão Geral
+    mr_quedas: "Maiores quedas"
+    mr_altas: "Maiores altas"
+    mr_nivel_sup: "Supervisor"
+    mr_nivel_dist: "Distribuidor"
+    mr_regua_pdv: "PDVs positivados"
+    mr_sem_compra: "sem compra"
+    mr_vazio: "sem variação neste recorte"
+    ver_por: "Ver por"                        # Refino E3: seletor das abas Supervisores e distribuidores e Penetração
+    vp_cluster: "Cluster"
+    pen_loja_usado: "usado no potencial"      # F10 (D-A): subtítulo da coluna kg/R$ por loja no distribuidor (o valor que multiplica)
+    pen_loja_nivel: "média do nível"          # F10 (D-A): nos níveis acima (volume ÷ lojas, só descritiva)
+    segmentos:
+      todos: "Todos os segmentos"
+      base_atual: "Base atual"
+      novos: "Novos distribuidores"
+      sem_venda: "Sem venda"                # 02/10/2026: distribuidores que pararam de vender (histórico mantido no canal)
+    estados_rtm:
+      certo: "Comprou do destino"
+      so_outro: "Comprou de outro"
+      sem_compra: "Não comprou"
+      nao_mensuravel: "Destino não mensurável"   # Fase 4 (P1): era "Sem cobertura"
+    rtm_motivos:                              # Fase 4 (P2): as tres causas de "destino nao mensuravel"
+      sem_cadastro: "destino sem cadastro no de-para de distribuidores"
+      fora_do_painel: "destino cadastrado, mas fora do painel (sem linha na hierarquia)"
+      sem_sellout: "destino cadastrado e no painel, mas sem sell-out na série"
+  textos:
+    # F2 (RN-22): legenda do gráfico quando algum mês exibido não tem par no ano anterior; {mes} = primeiro mês da série
+    sem_ly: "sem LY na série (Mtrix a partir de {mes})"
+    # F5 (RN-25): comparativo anual sem par e situação de cada ano na tabela "Ano a ano"; {mes} = primeiro mês da série
+    sem_par_anual: "sem par na série (Mtrix a partir de {mes})"
+    ano_completo: "{n} de 12"
+    ano_em_curso: "{n} de 12 · em curso"
+    ano_incompleto: "{n} de 12 · incompleto (série começa em {mes})"
+    # F6 (RN-27, RN-30, RN-34): textos da aba Penetração; {mes} = mês fechado, {mes_ref} = mês de referência, {p} = percentil,
+    # {janela} = janela do fator, {n} = mínimo de lojas
+    pen_competencia: "Competência: {mes} (último mês fechado)"
+    pen_competencia_parcial: "Competência: {mes}, último mês fechado ({mes_ref} em andamento não entra)"
+    pen_referencia: "referência: P{p} dos distribuidores na categoria, {mes}"
+    pen_fator_indisponivel: "fator indisponível: nenhuma loja fez a primeira compra da categoria na janela {janela}"
+    pen_censura: "a primeira compra da categoria é observada desde {mes}; lojas que já compravam antes disso não contam como novas"
+    # F10 (D-A): legenda do potencial nos níveis acima do distribuidor, onde o número é soma; {n} = distribuidores do nível, {medida} = kg | R$
+    pen_soma: "soma de {n} distribuidores do nível (cada um: lojas a positivar × {medida}/loja usado × fator)"
+    pen_media_canal: "média do canal (< {n} lojas compradoras)"
+    pen_acima_referencia: "acima da referência"
+    # F7 (RN-32, RN-33): janela e notas dos blocos de ativação e recorrência; {janela} = 1º a último mês, {n} = meses
+    pen_janela: "janela {janela}: os {n} meses que terminam no mês fechado"
+    pen_ativacao_nota: >-
+      Ativação = ampliar quem compra a categoria. Base elegível = base ativa do nível (não existe cadastro de PDVs
+      elegíveis nas bases); a ativar = base ativa − PDVs que compraram a categoria em pelo menos um mês da janela.
+      Não confundir com "lojas a positivar" (gap do mês contra a referência): são réguas e nomes distintos.
+    # F9 (RN-48): textos do bloco de resumos
+    resumo_titulo: "Resumo do recorte"
+    resumo_sem_dado: "sem dado suficiente para {indicador} no recorte"
+    resumo_sem_ly: "sem LY na série"
+    resumo_atencao: "atenção"
+    resumo_nota: "Frases geradas por regras do config (RN-48), avaliadas sobre o recorte atual; \"atenção\" marca o limiar da regra. Passe o mouse para ver a memória de cálculo."
+    pen_recorrencia_nota: >-
+      Recorrência mensal = PDVs que compraram a categoria no mês ÷ PDVs que a compraram na janela; "sem compra no mês"
+      é a oportunidade de recorrência. Frequência = meses com compra da categoria na janela (1 a 5). Sem regra de
+      sazonalidade: a série é curta; a comparação é com o mesmo mês do ano anterior, quando existir.
+    # {mes} e {data} sao preenchidos pelo pipeline (mes de referencia e data da ultima carga)
+    mes_em_andamento: >-
+      {mes} parcial, atualizado em {data}. Os comparativos confrontam um mês incompleto com meses cheios.
+    # RN-58 (decisão 7): nota da estimativa e definição da frequência de compra (aba Definições e memória de cálculo)
+    frequencia_nota: "estimativa calibrada no total Mtrix"
+    frequencia_definicao: >-
+      Frequência de compra = atendimentos (NFs) do mês ÷ PDVs positivados do recorte; devolução não conta e só entram
+      linhas com kg maior que zero. A Mtrix entrega a frequência por SKU, então as NFs de cada PDV em cada distribuidor são
+      ESTIMADAS: ficam entre a maior frequência de SKU do PDV e a soma das frequências, pela união proporcional, com um
+      parâmetro por mês ajustado para que a soma de todos os PDVs feche com o total de atendimentos da Mtrix. PDV com um só
+      SKU fica com o valor exato. Acima do distribuidor, as NFs do PDV somam as de todos os distribuidores e o PDV conta uma
+      vez. O erro abaixo do canal não é mensurável com as bases. Na lista de PDVs aparece só o mínimo sem estimativa
+      (maior frequência de SKU do PDV no mês).
+    rtm_sup_nota: "{n} clientes com destino sem cadastro não têm supervisor e não aparecem neste recorte"
+    rtm_sup_vazio: "sem clientes RTM com destino deste supervisor"
+    rtm_nao_mensuravel: >-
+      Cliente cujo distribuidor de destino não existe no de-para de distribuidores, está fora do painel
+      (sem linha na hierarquia) ou não reportou sell-out à Mtrix na série. Sem sell-out do destino não
+      dá para saber se o cliente comprou dele; por isso ele fica fora do denominador da aderência e nunca
+      é contado como "não comprou". É um atributo de cadastro, igual em todos os meses.
+  tabela:                                   # usados pelo componente de tabela da Fase 3
+    amostra_linhas: 25                      # linhas exibidas por padrão antes de "Expandir"
+    debounce_ms: 250                        # espera da busca por texto
+    expandir_passo: 200                     # "Expandir" mostra este tanto; "Mostrar mais" acrescenta o mesmo tanto
+    expandir_maximo: 2000                   # teto de linhas no DOM de uma vez (busca/ordenação/CSV valem sobre todas)
+  abas:                                     # Fase 2 (aprovado 09/09/2026): ordem, rótulo e quais filtros da barra agem em cada aba
+    # Refino E1 (13/09/2026, D14): abas Alavancas e Matriz de oportunidades removidas
+    # 13/09/2026: "periodo" (RN-59) nas abas com série mensal; RTM recebe supervisor (D18 revista, RN-44) e periodo (só na visão histórico)
+    # Refino E3 (13/09/2026, D14/D27): Visão geral + Evolução = "Visão Geral"; Clusters e supervisores + Distribuidores = "Supervisores e distribuidores" (id distribuidores, para não quebrar links)
+    # 22/09/2026 (Douglas, RN-44 revista): "distribuidor" na Visão Geral — cards e gráfico mês a mês do distribuidor; ranking do mês oculto
+    - {id: visao,          rotulo: "Visão Geral",             filtros: [mes, segmento, distribuidor, categoria, supervisor, calendario, periodo]}
+    - {id: distribuidores, rotulo: "Supervisores e distribuidores", filtros: [mes, segmento, distribuidor, categoria, supervisor, calendario, periodo]}
+    - {id: pdv,            rotulo: "Pontos de venda",         filtros: [mes, distribuidor, supervisor]}
+    - {id: penetracao,     rotulo: "Penetração",              filtros: [segmento, categoria, distribuidor, supervisor], oculta: true}   # F6 (RN-50, A.3): mês fechado; calendário não age · Estabilização A3 (14/09/2026): oculta da navegação, mantida no projeto
+    - {id: rtm,            rotulo: "RTM",                     filtros: [mes, supervisor], oculta: true}   # Refino E5: RTM mostra o mês final do período · Estabilização A3 (14/09/2026): oculta da navegação, mantida no projeto
+    - {id: definicoes,     rotulo: "Definições",              filtros: []}
+  mes_ranking:                              # Refino E3 (D7, 13/09/2026): "O que aconteceu no mês" — maiores quedas e altas vs mês anterior
+    n: 5                                    # itens em cada lista (quedas e altas)
+  aba_padrao: visao                         # aba aberta quando não há estado salvo (localStorage/URL)
+  # ---- F0 (10/09/2026): inertes até a fase indicada. painel.abas só muda na fase que cria a aba (validação exige aba no template);
+  # as abas Evolução (F3), Penetração (F6) e Matriz (F8) entram em painel.abas na fase que as cria (RN-50).
+  graficos:                                 # RN-46, RN-47 (A.11) — F2: evolucao_ly e chave_padrao; F3: categorias_top_n e categorias_outras_rotulo
+    evolucao_ly: coluna_mais_linha          # coluna = mês; linha com marcador = mesmo mês LY (RN-22: sem LY = ausência)
+    chave_padrao: pdv                       # F2 (Q-a): pdv | medida — chave do gráfico ao abrir sem estado salvo
+    categorias_top_n: 5
+    categorias_outras_rotulo: "Outras categorias"
+  filtros:
+    supervisor:                             # RN-44 (A.13/D18, D19) — fase F4
+      selecao: unica
+      abas: [visao, distribuidores, pdv, penetracao, rtm]   # rtm: D18 revista (13/09/2026), supervisor do destino
+  resumos:                                  # RN-48 (A.14/D17) — F9 (11/09/2026): 24 regras, limiares aprovados item a item pelo Douglas;
+                                            # F10 (Q6, Q7): piso de base na D1 (≥ 30 PDVs no mês de comparação) e na R4 (≥ 20 clientes)
+    ativo: false                            # Refino E1 (13/09/2026, D18): desligado; código e regras mantidos (regras M* e A* removidas com Matriz e Alavancas)
+    # palavras que nenhuma frase pode conter (RN-48: so fatos; sem adjetivo, causa, prescricao, meta ou previsao)
+    termos_vetados: [meta, previsão, previsto, garantido, culpa, culpado, deveria, precisa, ruim, ótimo, péssimo, excelente, bom, mau, urgente]
+    # cada regra: id · aba · rn · indicador · tipo (operacao do motor) · parametros · texto ({campo}: formato pelo sufixo
+    # _pct _pp _t _rs _m _n _dn _dm) · limiar (marca "atencao"; ausente = informativa) · link (proximo nivel)
+    regras:
+      - {id: V1, aba: visao, rn: RN-21, indicador: "DN do mês", tipo: dn_mes,
+         texto: "DN {dn_pct} em {mes}: {d1_pp} vs {mes_ant}; vs {mes_ly}: {dly_pp}",
+         limiar: {campo: d1_abs, op: ">=", valor: 1.0, rotulo: "|Δ vs mês anterior| ≥ 1,0 p.p."}, link: {aba: evolucao}}
+      - {id: V2, aba: visao, rn: RN-21, indicador: "contribuição dos distribuidores à variação de PDVs", tipo: delta_serie_extremo, fonte: distribuidores, campo: pos, incluir_kpi: true,
+         texto: "Cobertura {cob_n} PDVs ({cob_var_pct} vs {mes_ant}): maior queda {min_nome} ({min_d_dn}), maior alta {max_nome} ({max_d_dn})",
+         limiar: {campo: ext_abs, op: ">=", valor: 100, rotulo: "|Δ do distribuidor| ≥ 100 PDVs"}, link: {aba: distribuidores, aplicar: "dist:min_nome"}}
+      - {id: V3, aba: visao, rn: RN-29, indicador: "categoria com maior queda de % cobertura", tipo: extremo, fonte: categorias, campo: pct_cobertura_var_mes_anterior, direcao: min, saida: valor_pp,
+         texto: "Categoria com maior queda de % cobertura: {nome}, {valor_pp} vs {mes_ant}",
+         limiar: {campo: valor_pp, op: "<=", valor: -1.0, rotulo: "queda ≥ 1,0 p.p."}, link: {aba: evolucao, aplicar: "cat:id"}}
+      - {id: V4, aba: visao, rn: RN-02, indicador: "PDVs sem compra no mês", tipo: pdv_sem_compra,
+         texto: "{n_sem_n} pares da base ativa sem compra em {mes} ({pct_pct}), que compraram {kg_t} / {rs_rs} na janela",
+         limiar: {campo: pct_pct, op: ">=", valor: 30, rotulo: "≥ 30% da base ativa"}, link: {aba: pdv}}
+      - {id: E1, aba: evolucao, rn: RN-46, indicador: "contribuição das categorias à variação do volume", tipo: delta_serie_extremo, fonte: categorias, campo: m, incluir_total: true,
+         texto: "Medida {tot_d_dm} vs {mes_ant}: maior retração {min_nome} ({min_d_dm}), maior contribuição {max_nome} ({max_d_dm})",
+         limiar: {campo: ext_abs, op: ">=", valor_t: 10, valor_rs: 300000, rotulo: "|Δ da categoria| ≥ 10 t (R$ 300 mil)"}, link: {aba: evolucao, aplicar: "cat:min_id"}}
+      - {id: C1, aba: clusters, rn: RN-04, indicador: "variação de DN por cluster", tipo: extremo, fonte: clusters, campo: pct_cobertura_var_mes_anterior, ambos: true, saida: valor_pp,
+         texto: "Cluster com maior queda de DN: {min_nome} ({min_valor_pp}); maior alta {max_nome} ({max_valor_pp}) vs {mes_ant}",
+         limiar: {campo: ext_abs, op: ">=", valor: 2.0, rotulo: "|Δ| ≥ 2,0 p.p."}, link: {aba: clusters}}
+      - {id: C2, aba: clusters, rn: RN-10, indicador: "variação de PDVs por supervisor", tipo: delta_serie_extremo, fonte: supervisores, campo: pos,
+         texto: "Supervisor com maior queda de PDVs: {min_nome} ({min_d_dn}); maior alta {max_nome} ({max_d_dn}) vs {mes_ant}",
+         limiar: {campo: ext_abs, op: ">=", valor: 100, rotulo: "|Δ| ≥ 100 PDVs"}, link: {aba: clusters, aplicar: "sup:min_id"}}
+      - {id: C3, aba: clusters, rn: RN-04, indicador: "menor DN entre supervisores", tipo: extremo, fonte: supervisores, campo: pct_cobertura, direcao: min, saida: valor_pct, comparar: {kpi: pct_cobertura, saida: ref_pct, dif: dif_pp},
+         texto: "Menor DN entre supervisores: {nome}, {valor_pct}, {dif_pp} vs o recorte ({ref_pct})",
+         limiar: {campo: dif_pp, op: "<=", valor: -5.0, rotulo: "≥ 5,0 p.p. abaixo do recorte"}, link: {aba: clusters, aplicar: "sup:id"}}
+      - {id: D1, aba: distribuidores, rn: RN-21, indicador: "variação de cobertura por distribuidor", tipo: extremo, fonte: distribuidores, campo: cobertura_var_mes_anterior, ambos: true, saida: valor_pct, piso: {serie: pos, mes: ant, min: 30, rotulo: "piso: ≥ 30 PDVs no mês de comparação"},
+         texto: "Maior queda de cobertura: {min_nome} ({min_valor_pct}); maior alta {max_nome} ({max_valor_pct}) vs {mes_ant}",
+         limiar: {campo: ext_abs, op: ">=", valor: 20, rotulo: "|Δ| ≥ 20%"}, link: {aba: distribuidores, aplicar: "dist:min_nome"}}
+      - {id: D2, aba: distribuidores, rn: RN-12, indicador: "distribuidores novos", tipo: novos,
+         texto: "{n_novos_n} distribuidores novos: {pdvs_n} PDVs ({pct_pct} da cobertura) e {vol_m}", link: {aba: distribuidores, aplicar: "seg:novos"}}
+      - {id: D3, aba: distribuidores, rn: RN-30, indicador: "distribuidores abaixo da referência nas foco", tipo: abaixo_p75,
+         texto: "{n_um_n} de {n_dist_n} distribuidores abaixo da referência P75 em pelo menos uma categoria foco; {n_quatro_n} nas {n_foco_n}",
+         limiar: {campo: pct_quatro_pct, op: ">=", valor: 25, rotulo: "≥ 25% dos distribuidores abaixo nas quatro foco"}, link: {aba: penetracao}}
+      - {id: D4, aba: distribuidores, rn: RN-26, indicador: "distribuidores sem venda no mês em andamento", tipo: sem_venda_mes,
+         texto: "{n_n} distribuidores ainda sem venda em {mes} (mês em andamento): {lista}",
+         limiar: {campo: n_n, op: ">=", valor: 1, rotulo: "≥ 1"}, link: {aba: distribuidores}}
+      - {id: P1, aba: pdv, rn: RN-02, indicador: "maior PDV sem compra no mês", tipo: pdv_maior_sem_compra,
+         texto: "Maior PDV sem compra em {mes}: {nome} · {dist} · {cnpj}, {kg_t} / {rs_rs} na janela", link: {aba: pdv, aplicar: "dist:dist"}}
+      - {id: P2, aba: pdv, rn: RN-02, indicador: "concentração do volume nos maiores PDVs", tipo: pdv_concentracao, n: 1000,
+         texto: "Os 10% maiores pares ({n10_n}) concentram {pct10_pct} do volume de {mes}; os {N_n} maiores, {pctN_pct}",
+         limiar: {campo: pct10_pct, op: ">=", valor: 70, rotulo: "≥ 70% nos 10% maiores"}, link: {aba: pdv}}
+      - {id: R1, aba: rtm, rn: RN-52, indicador: "aderência ao direcionamento", tipo: rtm_aderencia,
+         texto: "Aderência {pct_pct} em {mes}, {d1_pp} vs {mes_ant}",
+         limiar: {campo: d1_abs, op: ">=", valor: 1.0, rotulo: "|Δ| ≥ 1,0 p.p."}, link: {aba: rtm}}
+      - {id: R2, aba: rtm, rn: RN-52, indicador: "vazamento", tipo: rtm_vazamento,
+         texto: "{n_n} clientes compraram de outro distribuidor em {mes} ({pct_pct} dos mensuráveis): {kg_t} / {rs_rs}",
+         limiar: {campo: pct_pct, op: ">=", valor: 5, rotulo: "≥ 5% dos mensuráveis"}, link: {aba: rtm}}
+      - {id: R3, aba: rtm, rn: RN-54, indicador: "ativados parados", tipo: rtm_parados,
+         texto: "{parados_n} ativados parados de {ativados_n} já ativados ({pct_pct}): compraram do destino algum dia, não em {mes}",
+         limiar: {campo: pct_pct, op: ">=", valor: 50, rotulo: "≥ 50% dos ativados"}, link: {aba: rtm}}
+      - {id: R4, aba: rtm, rn: RN-52, indicador: "destino com maior gap", tipo: extremo, fonte: rtm_destinos, campo: pct_sem_compra, direcao: max, saida: valor_pct, extras: {sem_compra_n: sem_compra, clientes_n: clientes}, piso: {campo: clientes, min: 20, rotulo: "piso: ≥ 20 clientes no destino"},
+         texto: "Destino com maior gap: {nome}, {sem_compra_n} de {clientes_n} clientes sem compra ({valor_pct})",
+         limiar: {campo: valor_pct, op: ">=", valor: 50, rotulo: "≥ 50% sem compra"}, link: {aba: rtm}}
+      - {id: N1, aba: penetracao, rn: RN-31, indicador: "categoria com mais lojas a positivar", tipo: extremo, fonte: pen_canal, campo: a_positivar, direcao: max, saida: valor_n, nome: categoria, extras: {potencial_m: {t: potencial_t, rs: potencial_rs}},
+         texto: "Categoria com mais lojas a positivar: {nome}, {valor_n} (potencial de entrada {potencial_m}/mês)", link: {aba: penetracao, aplicar: "cat:cat_id"}}
+      - {id: N2, aba: penetracao, rn: RN-36, indicador: "nível mais distante da referência nas foco", tipo: extremo, fonte: pen_sup_foco, campo: pct_bench, direcao: min, saida: valor_pct, nome: pen_sup,
+         texto: "Nível mais distante da referência nas foco: {nome}, {valor_pct} da referência",
+         limiar: {campo: valor_pct, op: "<", valor: 70, rotulo: "< 70% da referência"}, link: {aba: penetracao, aplicar: "sup:sup_id"}}
+      - {id: N3, aba: penetracao, rn: RN-33, indicador: "maior oportunidade de recorrência", tipo: extremo, fonte: pen_canal, campo: sem_compra_mes, direcao: max, saida: valor_n, nome: categoria, extras: {pct_pct: pct_sem_compra_mes},
+         texto: "Maior oportunidade de recorrência: {nome}, {valor_n} compradores na janela sem compra no mês ({pct_pct})",
+         limiar: {campo: pct_pct, op: ">=", valor: 50, rotulo: "≥ 50% sem compra no mês"}, link: {aba: penetracao, aplicar: "cat:cat_id"}}
+  memoria:                                  # RN-49 (A.14; §21 do pedido) — F10 (11/09/2026): 26 fichas, aprovadas item a item pelo Douglas (lista ok e D-A opção 1)
+    ativo: false                            # Refino E1 (13/09/2026, D18): desligada; código e fichas mantidos (fichas de Matriz e Alavancas removidas)
+    marca: "ⓘ"                              # Q1: marca do botão ao lado do número
+    copiar: true                              # Q3: botão "copiar" no modal
+    tabelas:                                  # Q4: memória por COLUNA (cabeçalho) em todas as ligadas; por LINHA só nas colunas de oportunidade
+      por_coluna: true
+      por_linha: [a_positivar, potencial_t, potencial_rs, regime_t, regime_rs, a_ativar, sem_compra_mes]
+    extrato_rn: true                          # Q5: objetivo/definição/fórmula das RN citadas, lido de docs/regras_negocio.md, no modal e nas Definições
+    tolerancia: {abs: 0.06, rel: 0.5}         # mesma da F9; a tela soma a isso a meia unidade de arredondamento de cada número exibido
+    textos:
+      titulo: "Memória de cálculo"
+      copiar: "Copiar"
+      copiado: "copiado para a área de transferência"
+      fechar: "Fechar ✕"
+      coluna: "Ficha da coluna: abra pelo {marca} de um número ou de uma linha para ver a conta com os valores do recorte"
+      conta_ok: "a conta fecha com os números da tela"
+      conta_dif: "a conta não fecha com os números da tela: {det}"
+      esperado_dif: "diferente do esperado pelo pipeline no recorte do canal: {det}"
+      frase: "frase gerada pela regra {id} do config (RN-48)"
+      definicoes: "Cada card, cada coluna ligada das tabelas e as colunas de oportunidade linha a linha têm um botão {marca} que abre a memória de cálculo: indicador, regra (RN), período, filtros ativos, fórmula, a conta com os números da tela, a fonte até a coluna do arquivo e a data dos dados. As fichas são declaradas no config (RN-49); a conta é conferida na tela e no pipeline. Abaixo, o extrato das regras citadas."
+      rotulos: {regra: "Regra", periodo: "Período", filtros: "Filtros ativos", formula: "Fórmula", conta: "Conta", conferencia: "Conferência", fonte: "Fonte", dados: "Dados de", nota: "Observação", colunas: "colunas", objetivo: "Objetivo", definicao: "Definição", valores: "Valores"}
+      periodos: {mes: "{mes} (mês de referência)", mes_fechado: "{mes_fechado} (último mês fechado)", janela: "janela {janela}", janela_fator: "janela do fator {janela_fator}", acumulado: "{periodo}"}
+    fontes_rotulos: {sellout: "Mtrix · sell-out mensal", produtos: "Produtos.xlsx · categoria do SKU", distribuidores: "Distribuidores_DePara.xlsx", hierarquia: "Hierarquia (bases compartilhadas) · supervisor (N3)", rtm: "RTM_DePara_Transicao.xlsx", clusters: "Clusters_DePara.xlsx"}
+    # cada ficha: id · rn (lista) · titulo · indicador · abas · periodo · formula (literal) · parcelas (campos que JÁ existem no JSON)
+    # · conta / conta_rs (template {campo}; métrica t / R$) · conta_soma / conta_soma_rs (níveis acima do distribuidor, onde o número é soma)
+    # · confere / confere_rs (op: div100 a÷b×100=r · sub a−b=r · div a×k÷b=r · mul a×b×k=r · mul3 a×b×c×k=r · gap max(0,b−p)×n÷100=r · nenhuma)
+    # · perspectiva: calendario (troca _fiscal_ por _civil_ com o toggle) · fonte (chaves de `fontes`) · curated · liga (card:<data-k> · pen:<card>
+    # · rtm:<card> · col:<tabela>.<coluna>) · nota
+    fichas:
+      - {id: base_ativa, rn: [RN-02], titulo: "Base ativa", indicador: "Base ativa · PDVs", abas: [visao, clusters, distribuidores], periodo: janela,
+         formula: "PDVs distintos positivados em pelo menos um dos últimos 6 meses, no nível",
+         parcelas: [base_ativa], conta: "{base_ativa} PDVs distintos na janela {janela}", confere: nenhuma,
+         fonte: [sellout], curated: [DN_PDV_BASE_ATIVA, DN_CANAL_MES],
+         liga: ["card:base_ativa", "col:clusters.base_ativa", "col:supervisores.base_ativa", "col:distribuidores.base_ativa"],
+         nota: "É o denominador do DN e a base elegível da ativação (RN-41). Nula enquanto a janela não está completa. PDV atendido por dois distribuidores conta uma vez no nível (RN-10)"}
+      - {id: sem_compra_mes, rn: [RN-08], titulo: "Sem compra no mês", indicador: "Sem compra no mês", abas: [visao], periodo: mes,
+         formula: "base ativa − PDVs compradores no mês",
+         parcelas: [base_ativa, cobertura_pdv, sem_compra_mes], conta: "{base_ativa} − {cobertura_pdv} = {sem_compra_mes}",
+         confere: {op: sub, a: base_ativa, b: cobertura_pdv, r: sem_compra_mes},
+         fonte: [sellout], curated: [DN_CANAL_MES], liga: ["card:sem_compra_mes"],
+         nota: "PDVs que compraram na janela e não compraram no mês: é oportunidade, não perda confirmada"}
+      - {id: cobertura_pdv, rn: [RN-03], titulo: "Cobertura (PDVs compradores)", indicador: "Cobertura · PDVs compradores", abas: [visao, clusters, distribuidores], periodo: mes,
+         formula: "PDVs distintos com sell-out em kg maior que zero no mês, no nível",
+         parcelas: [cobertura_pdv], conta: "{cobertura_pdv} PDVs distintos positivados em {mes}", confere: nenhuma,
+         fonte: [sellout], curated: [DN_CANAL_MES],
+         liga: ["card:cobertura_pdv", "col:categorias.cobertura_pdv", "col:clusters.cobertura_pdv", "col:supervisores.cobertura_pdv", "col:distribuidores.cobertura_pdv"],
+         nota: "Linha com R$ maior que zero e kg igual ou menor que zero não positiva (3 na série)"}
+      - {id: dn, rn: [RN-04], titulo: "% de cobertura (Distribuição Numérica)", indicador: "% de cobertura (DN)", abas: [visao], periodo: mes,
+         formula: "cobertura ÷ base ativa × 100",
+         parcelas: [cobertura_pdv, base_ativa, pct_cobertura], conta: "{cobertura_pdv} ÷ {base_ativa} × 100 = {pct_cobertura}",
+         confere: {op: div100, a: cobertura_pdv, b: base_ativa, r: pct_cobertura},
+         fonte: [sellout], curated: [DN_CANAL_MES], liga: ["card:pct_cobertura"],
+         nota: "Régua oficial do painel. A janela de 6 meses é o que fixa o denominador (A8, 14/09/2026): 5 meses dariam 124.800 e DN 57,3% em ago/26 só por definição (RN-02)"}
+      - {id: medida, rn: [RN-05, RN-06], titulo: "Volume (t) e Valor do sell-through (R$)", indicador: "Volume do mês · Valor do mês", abas: [visao, evolucao, clusters, distribuidores], periodo: mes,
+         formula: "soma do sell-out em kg ÷ 1.000 · em R$, soma com sinal das mesmas linhas",
+         parcelas: [volume_t, receita_mi], conta: "{volume_t} t no mês", conta_rs: "{receita_mi} no mês", confere: nenhuma,
+         fonte: [sellout], curated: [DN_CANAL_MES],
+         liga: ["card:volume_t", "col:categorias.volume_t", "col:categorias.receita_rs", "col:clusters.volume_t", "col:clusters.receita_rs", "col:supervisores.volume_t", "col:supervisores.receita_rs",
+                "col:distribuidores.volume_t", "col:distribuidores.receita_rs"],
+         nota: "Valor = venda do distribuidor ao PDV conforme reportada à Mtrix; não é faturamento Dori (RN-40). O seletor de métrica não muda quem é positivado (RN-43)"}
+      - {id: medida_pdv, rn: [RN-07], titulo: "kg / PDV e R$ / PDV", indicador: "kg / PDV comprador · R$ / PDV comprador", abas: [visao, clusters, distribuidores], periodo: mes,
+         formula: "medida do mês ÷ PDVs compradores",
+         parcelas: [volume_t, cobertura_pdv, kg_pdv, receita_mi, rs_pdv],
+         conta: "{volume_t} t ÷ {cobertura_pdv} PDVs = {kg_pdv} kg/PDV", confere: {op: div, a: volume_t, b: cobertura_pdv, r: kg_pdv, k: 1000},
+         conta_rs: "{receita_mi} ÷ {cobertura_pdv} PDVs = {rs_pdv}/PDV", confere_rs: {op: div, a: receita_mi, b: cobertura_pdv, r: rs_pdv, k: 1000000},
+         fonte: [sellout], curated: [DN_CANAL_MES],
+         liga: ["card:kg_pdv", "col:clusters.kg_pdv", "col:clusters.rs_pdv", "col:supervisores.kg_pdv", "col:supervisores.rs_pdv", "col:distribuidores.kg_pdv", "col:distribuidores.rs_pdv"],
+         nota: "O denominador é a cobertura (quem comprou), nunca a base ativa"}
+      - {id: frequencia, rn: [RN-58], titulo: "Frequência de compra", indicador: "Frequência de compra · atendimentos por PDV comprador", abas: [visao, clusters, distribuidores], periodo: mes,
+         formula: "atendimentos (NFs) estimados do mês ÷ PDVs compradores; mínimo sem estimativa = Σ maior frequência de SKU de cada PDV no distribuidor ÷ PDVs compradores",
+         parcelas: [atendimentos, cobertura_pdv, frequencia, atendimentos_min, frequencia_min],
+         conta: "{atendimentos} NFs estimadas ÷ {cobertura_pdv} PDVs = {frequencia} · mínimo sem estimativa: {atendimentos_min} ÷ {cobertura_pdv} = {frequencia_min}",
+         confere: [{op: div, a: atendimentos, b: cobertura_pdv, r: frequencia, k: 1}, {op: div, a: atendimentos_min, b: cobertura_pdv, r: frequencia_min, k: 1}],
+         fonte: [sellout], curated: [DN_CANAL_MES, DN_FREQ_CALIBRACAO],
+         liga: ["card:frequencia", "col:clusters.frequencia", "col:supervisores.frequencia", "col:distribuidores.frequencia"],
+         nota: "Estimativa calibrada no total Mtrix: a Mtrix entrega a frequência por SKU; as NFs de cada PDV em cada distribuidor ficam entre a maior frequência de SKU e a soma, pela união proporcional com o parâmetro do mês que fecha a soma de todos os PDVs com o total de atendimentos da Mtrix. PDV com um só SKU fica com o valor exato. Acima do distribuidor, as NFs do PDV somam as de todos os distribuidores e o PDV conta uma vez (RN-10). Só linhas com kg maior que zero; devolução não conta. O erro abaixo do canal não é mensurável"}
+      - {id: comparativos, rn: [RN-21, RN-22], titulo: "Comparativos (mês anterior, L3M, LY)", indicador: "comparativos", abas: [visao, evolucao, clusters, distribuidores], periodo: mes,
+         formula: "contagens e medidas em % ((valor ÷ referência − 1) × 100); percentuais em p.p. (valor − referência)",
+         parcelas: [pct_cobertura, pct_cobertura_var_mes_anterior, pct_cobertura_var_l3m, pct_cobertura_var_ly],
+         conta: "{pct_cobertura} · vs mês anterior {pct_cobertura_var_mes_anterior} · vs L3M {pct_cobertura_var_l3m} · vs LY {pct_cobertura_var_ly}", confere: nenhuma,
+         fonte: [sellout], curated: [DN_CANAL_MES, DIM_CALENDARIO],
+         liga: ["card:pct_cobertura_var_mes_anterior", "col:categorias.cobertura_var_mes_anterior", "col:categorias.cobertura_var_l3m", "col:categorias.cobertura_var_ly"],
+         nota: "L3M = média dos 3 meses anteriores. Mês sem par no ano anterior é ausência, nunca zero (RN-22): a Mtrix começa em jul/25"}
+      - {id: acumulado, rn: [RN-25], titulo: "Acumulados e comparativo anual", indicador: "Acumulado no ano", abas: [visao, evolucao], periodo: acumulado, perspectiva: calendario,
+         formula: "soma das medidas dos meses do período até o mês; PDVs = distintos no período (não soma de meses)",
+         parcelas: [acum_fiscal_t, acum_fiscal_mi, acum_fiscal_pdvs],
+         conta: "{acum_fiscal_t} t e {acum_fiscal_pdvs} PDVs distintos em {periodo}", conta_rs: "{acum_fiscal_mi} e {acum_fiscal_pdvs} PDVs distintos em {periodo}", confere: nenhuma,
+         fonte: [sellout], curated: [DN_ACUM_ANO], liga: ["card:acum_fiscal_t"],
+         nota: "Nulo quando falta algum mês do período na série; o template nunca soma meses. O toggle de calendário troca o período (RN-23, RN-24)"}
+      - {id: acumulado_ly, rn: [RN-25, RN-22], titulo: "Acumulados e comparativo anual", indicador: "variação do acumulado vs ano anterior", abas: [visao, evolucao], periodo: acumulado, perspectiva: calendario,
+         formula: "acumulado do período − acumulado do mesmo período do ano anterior",
+         parcelas: [acum_fiscal_t, acum_fiscal_var_t, acum_fiscal_mi, acum_fiscal_var_rs],
+         conta: "{acum_fiscal_t} t · vs ano anterior {acum_fiscal_var_t}", conta_rs: "{acum_fiscal_mi} · vs ano anterior {acum_fiscal_var_rs}", confere: nenhuma,
+         fonte: [sellout], curated: [DN_ACUM_ANO], liga: ["card:acum_fiscal_var_t"],
+         nota: "Sem par completo na série o valor é nulo; hoje nenhum ano fecha par (Mtrix a partir de jul/25) — destrava com a Mtrix set/24 a jun/25"}
+      - {id: participacao, rn: [RN-17], titulo: "Categoria", indicador: "participação da categoria", abas: [visao, evolucao], periodo: mes,
+         formula: "medida da categoria ÷ medida do canal no mês × 100",
+         parcelas: [participacao_vol, participacao_rs], conta: "{participacao_vol} do volume do canal", conta_rs: "{participacao_rs} do valor do canal", confere: nenhuma,
+         fonte: [sellout, produtos], curated: [DN_CANAL_CAT_MES], liga: ["col:categorias.participacao_vol", "col:categorias.participacao_rs"],
+         nota: "A categoria vem do SKU pelo Produtos.xlsx. O delta de participação vs LY é em p.p. e fica vazio sem par no ano anterior"}
+      - {id: dn_nivel, rn: [RN-04, RN-18], titulo: "% de cobertura por cluster e supervisor", indicador: "DN do cluster / do supervisor", abas: [clusters], periodo: mes,
+         formula: "cobertura do nível ÷ base ativa do nível × 100",
+         parcelas: [cobertura_pdv, base_ativa, pct_cobertura], conta: "{cobertura_pdv} ÷ {base_ativa} × 100 = {pct_cobertura}",
+         confere: {op: div100, a: cobertura_pdv, b: base_ativa, r: pct_cobertura},
+         fonte: [sellout, clusters, hierarquia], curated: [DN_CLUSTER_CANAL_MES, DN_SUPERVISOR_CANAL_MES],
+         liga: ["col:clusters.pct_cobertura", "col:supervisores.pct_cobertura"],
+         nota: "PDV em mais de um supervisor conta uma vez em cada e uma vez no canal (RN-10): a soma dos níveis é maior que o total. O supervisor é o N3 de hoje aplicado a toda a série (RN-15)"}
+      - {id: dn_distribuidor, rn: [RN-13, RN-04], titulo: "Distribuidor", indicador: "cobertura e DN do distribuidor", abas: [distribuidores], periodo: mes,
+         formula: "cobertura do distribuidor ÷ base ativa do distribuidor × 100",
+         parcelas: [cobertura_pdv, base_ativa, pct_cobertura], conta: "{cobertura_pdv} ÷ {base_ativa} × 100 = {pct_cobertura}",
+         confere: {op: div100, a: cobertura_pdv, b: base_ativa, r: pct_cobertura},
+         fonte: [sellout, distribuidores, hierarquia], curated: [DN_DISTRIBUIDOR_MES, DN_DISTRIBUIDOR_CAT_MES], liga: ["col:distribuidores.pct_cobertura"],
+         nota: "Distribuidor = CNPJ de filial. Distribuidor sem linha na Hierarquia fica fora do painel; o campo Status não exclui ninguém. Na linha de uma categoria, o numerador são os PDVs que compraram a categoria e o denominador segue a base ativa do distribuidor (RN-29)"}
+      - {id: pct_cob_cat_dist, rn: [RN-29], titulo: "% de cobertura da categoria (régua secundária)", indicador: "% cobertura por categoria", abas: [visao, distribuidores], periodo: mes,
+         formula: "PDVs que compraram a categoria ÷ base ativa do nível (não recortada por categoria) × 100",
+         parcelas: [cobertura_pdv, base_ativa, pct_cobertura], conta: "{cobertura_pdv} ÷ {base_ativa} × 100 = {pct_cobertura}",
+         confere: {op: div100, a: cobertura_pdv, b: base_ativa, r: pct_cobertura},
+         fonte: [sellout, produtos], curated: [DN_CANAL_CAT_MES, DN_DISTRIBUIDOR_CAT_MES], liga: ["col:categorias.pct_cobertura"],
+         nota: "O denominador é a base ativa do nível, NÃO recortada por categoria — a mesma régua do DN. Não há série por categoria: o drill segue na série total"}
+      - {id: pdv_janela, rn: [RN-11, RN-05], titulo: "Chave do PDV e medida do par", indicador: "kg / R$ do PDV na janela", abas: [pdv], periodo: janela,
+         formula: "soma do sell-out do par distribuidor × PDV nos meses da janela",
+         parcelas: [kg_janela, rs_janela], conta: "{kg_janela} kg na janela {janela}", conta_rs: "R$ {rs_janela} na janela {janela}", confere: nenhuma,
+         fonte: [sellout], curated: [DN_PDV_BASE_ATIVA], liga: ["col:pdv.13", "col:pdv.17"],
+         nota: "A linha é o PAR distribuidor × PDV, não o PDV: um PDV atendido por dois distribuidores aparece em duas linhas (RN-10). PDVs anonimizados pela Mtrix entram com chave própria (RN-11)"}
+      - {id: penetracao, rn: [RN-28], titulo: "Penetração da categoria (régua oficial)", indicador: "Penetração", abas: [penetracao], periodo: mes_fechado,
+         formula: "PDVs que compraram a categoria ÷ PDVs positivados do nível × 100",
+         parcelas: [lojas, positivados_nivel, penetracao], conta: "{lojas} ÷ {positivados_nivel} × 100 = {penetracao}",
+         confere: {op: div100, a: lojas, b: positivados_nivel, r: penetracao},
+         fonte: [sellout, produtos], curated: [DN_PEN_NIVEL_CAT, DN_PEN_DIST_CAT],
+         liga: ["pen:penetracao", "col:pen_categorias.penetracao", "col:pen_distribuidores.penetracao"],
+         nota: "Mede a categoria dentro de quem já compra. A aba Penetração é do último mês fechado, não do mês de referência (RN-27)"}
+      - {id: pct_cob_cat, rn: [RN-29], titulo: "% de cobertura da categoria (régua secundária)", indicador: "% cobertura da categoria", abas: [penetracao], periodo: mes_fechado,
+         formula: "PDVs que compraram a categoria ÷ base ativa do nível × 100",
+         parcelas: [lojas, base_elegivel, pct_cobertura], conta: "{lojas} ÷ {base_elegivel} × 100 = {pct_cobertura}",
+         confere: {op: div100, a: lojas, b: base_elegivel, r: pct_cobertura},
+         fonte: [sellout, produtos], curated: [DN_PEN_NIVEL_CAT], liga: ["col:pen_categorias.pct_cobertura"],
+         nota: "Régua secundária, só informativa: divide pela base ativa em vez dos positivados. A oficial é a penetração (RN-28)"}
+      - {id: benchmark, rn: [RN-30], titulo: "Benchmark de penetração", indicador: "Referência (P75)", abas: [penetracao], periodo: mes_fechado,
+         formula: "percentil 75 da penetração dos distribuidores com venda na categoria no mês fechado",
+         parcelas: [benchmark, pct_bench], conta: "referência {benchmark} · o nível está em {pct_bench} dela", confere: nenhuma,
+         fonte: [sellout, produtos], curated: [DN_PEN_BENCHMARK],
+         liga: ["col:pen_categorias.benchmark", "col:pen_distribuidores.benchmark"],
+         nota: "FIXA por categoria: não muda com filtro de supervisor, distribuidor ou segmento (RN-45). Todos os distribuidores com venda entram, sem mínimo"}
+      - {id: a_positivar, rn: [RN-31], titulo: "Lojas a positivar", indicador: "Lojas a positivar", abas: [penetracao], periodo: mes_fechado,
+         formula: "no distribuidor: (referência − penetração) × positivados ÷ 100, zero se acima da referência; nos níveis acima: soma dos distribuidores",
+         parcelas: [a_positivar, benchmark, penetracao, positivados_nivel, n_dist],
+         conta: "({benchmark} − {penetracao}) × {positivados_nivel} ÷ 100 = {a_positivar}", confere: {op: gap, b: benchmark, p: penetracao, n: positivados_nivel, r: a_positivar},
+         conta_soma: "soma de {n_dist} distribuidores do nível = {a_positivar} positivações de categoria (referência {benchmark}; penetração do nível {penetracao})",
+         fonte: [sellout, produtos], curated: [DN_PEN_DIST_CAT, DN_DISTRIBUIDOR_CAT_MES],
+         liga: ["pen:a_positivar", "col:pen_categorias.a_positivar", "col:pen_ativacao.a_positivar", "col:pen_distribuidores.a_positivar"],
+         nota: "Unidade = positivações de categoria, nunca PDVs (o mesmo PDV aparece em várias categorias). NÃO é o gap do nível: (referência − penetração do nível) × positivados daria outro número. Distribuidor acima da referência contribui 0; sem venda na categoria entra com penetração 0"}
+      - {id: medida_loja, rn: [RN-34], titulo: "Potencial de entrada", indicador: "kg / loja e R$ / loja compradora", abas: [penetracao], periodo: mes_fechado,
+         formula: "no distribuidor: média por loja compradora da categoria, truncada no percentil 99 (média do canal abaixo de 30 lojas) — é a usada no potencial; nos níveis acima: média simples do nível (volume ÷ lojas), só descritiva",
+         parcelas: [kg_loja, rs_loja, n_dist],
+         conta: "{kg_loja} kg por loja compradora, usado no potencial", conta_rs: "{rs_loja} por loja compradora, usado no potencial",
+         conta_soma: "{kg_loja} kg por loja: média simples do nível, só descritiva; o potencial do nível soma os {n_dist} distribuidores, cada um com o seu kg por loja usado",
+         conta_soma_rs: "{rs_loja} por loja: média simples do nível, só descritiva; o potencial do nível soma os {n_dist} distribuidores, cada um com o seu R$ por loja usado",
+         confere: nenhuma, fonte: [sellout, produtos], curated: [DN_PEN_DIST_CAT, DN_PEN_NIVEL_CAT],
+         liga: ["col:pen_categorias.kg_loja", "col:pen_categorias.rs_loja", "col:pen_distribuidores.kg_loja", "col:pen_distribuidores.rs_loja"],
+         nota: "Truncar = excluir as lojas acima do P99 da categoria no canal antes da média. Média do distribuidor só com 30 ou mais lojas compradoras na categoria; abaixo disso usa a média do canal, marcada com (canal). Decisão D-A (11/09/2026): no distribuidor a coluna mostra o valor usado; acima dele, a média do nível"}
+      - {id: fator, rn: [RN-34], titulo: "Potencial de entrada", indicador: "Fator observado", abas: [penetracao], periodo: janela_fator,
+         formula: "kg médio das lojas que fizeram a primeira compra da categoria no seu 1º mês ÷ kg médio de todos os compradores da categoria",
+         parcelas: [fator_pct], conta: "fator {fator_pct} na janela {janela_fator}", confere: nenhuma,
+         fonte: [sellout, produtos], curated: [DN_PEN_BENCHMARK], liga: ["col:pen_categorias.fator_pct"],
+         nota: "Observado e recalculado a cada mês, sem premissa fixa (os 50% do painel antigo eram premissa). Categoria sem loja nova na janela fica sem fator e o potencial sai vazio. Fator maior que 100% é mantido como observado, com aviso no log"}
+      - {id: potencial_entrada, rn: [RN-34], titulo: "Potencial de entrada", indicador: "Potencial de entrada", abas: [penetracao], periodo: mes_fechado,
+         formula: "no distribuidor: lojas a positivar × medida por loja usada × fator observado; nos níveis acima: soma dos distribuidores",
+         parcelas: [a_positivar, kg_loja, rs_loja, fator_pct, potencial_t, potencial_rs, n_dist],
+         conta: "{a_positivar} × {kg_loja} kg × {fator_pct} = {potencial_t} t/mês", confere: {op: mul3, a: a_positivar, b: kg_loja, c: fator_pct, r: potencial_t, k: 0.00001},
+         conta_rs: "{a_positivar} × {rs_loja} × {fator_pct} = {potencial_rs}/mês", confere_rs: {op: mul3, a: a_positivar, b: rs_loja, c: fator_pct, r: potencial_rs, k: 0.01},
+         conta_soma: "soma de {n_dist} distribuidores do nível = {potencial_t} t/mês", conta_soma_rs: "soma de {n_dist} distribuidores do nível = {potencial_rs}/mês",
+         fonte: [sellout, produtos], curated: [DN_PEN_DIST_CAT, DN_PEN_NIVEL_CAT],
+         liga: ["pen:potencial_entrada", "col:pen_categorias.potencial_t", "col:pen_categorias.potencial_rs", "col:pen_distribuidores.potencial_t", "col:pen_distribuidores.potencial_rs"],
+         nota: "Oportunidade calculada, não previsão. Nunca somar ao potencial em regime: são leituras alternativas do mesmo gap"}
+      - {id: potencial_regime, rn: [RN-35], titulo: "Potencial em regime e nomenclatura", indicador: "Potencial em regime", abas: [penetracao], periodo: mes_fechado,
+         formula: "no distribuidor: lojas a positivar × medida por loja usada (sem o fator); nos níveis acima: soma dos distribuidores",
+         parcelas: [a_positivar, kg_loja, rs_loja, regime_t, regime_rs, n_dist],
+         conta: "{a_positivar} × {kg_loja} kg = {regime_t} t/mês", confere: {op: mul, a: a_positivar, b: kg_loja, r: regime_t, k: 0.001},
+         conta_rs: "{a_positivar} × {rs_loja} = {regime_rs}/mês", confere_rs: {op: mul, a: a_positivar, b: rs_loja, r: regime_rs, k: 1},
+         conta_soma: "soma de {n_dist} distribuidores do nível = {regime_t} t/mês", conta_soma_rs: "soma de {n_dist} distribuidores do nível = {regime_rs}/mês",
+         fonte: [sellout, produtos], curated: [DN_PEN_DIST_CAT, DN_PEN_NIVEL_CAT],
+         liga: ["pen:potencial_regime", "col:pen_categorias.regime_t", "col:pen_categorias.regime_rs", "col:pen_distribuidores.regime_t", "col:pen_distribuidores.regime_rs"],
+         nota: "Teto teórico: supõe a loja nova comprando como as já compradoras desde o 1º mês. Nunca somado ao potencial de entrada"}
+      - {id: a_ativar, rn: [RN-32], titulo: "Comprador da categoria e a ativar (objetivo 1)", indicador: "A ativar (janela)", abas: [penetracao], periodo: janela,
+         formula: "base elegível − compradores da categoria na janela",
+         parcelas: [base_elegivel, compradores_janela, a_ativar], conta: "{base_elegivel} − {compradores_janela} = {a_ativar}",
+         confere: {op: sub, a: base_elegivel, b: compradores_janela, r: a_ativar},
+         fonte: [sellout, produtos], curated: [DN_PEN_NIVEL_CAT, DN_PDV_CAT_MASCARA],
+         liga: ["col:pen_ativacao.a_ativar", "col:pen_distribuidores.a_ativar"],
+         nota: "Base elegível = base ativa do nível (RN-41). Comprador na janela = kg maior que zero na categoria em pelo menos um dos 6 meses. Distinto de lojas a positivar, que é a régua do mês contra a referência"}
+      - {id: recorrencia, rn: [RN-33], titulo: "Recorrência da categoria (objetivo 2)", indicador: "Recorrência mensal e sem compra no mês", abas: [penetracao], periodo: mes_fechado,
+         formula: "compradores da categoria no mês ÷ compradores da categoria na janela × 100; sem compra no mês = a diferença",
+         parcelas: [compradores_mes, compradores_janela, recorrencia, sem_compra_mes],
+         conta: "{compradores_mes} ÷ {compradores_janela} × 100 = {recorrencia} · sem compra no mês {compradores_janela} − {compradores_mes} = {sem_compra_mes}",
+         confere: [{op: div100, a: compradores_mes, b: compradores_janela, r: recorrencia}, {op: sub, a: compradores_janela, b: compradores_mes, r: sem_compra_mes}],
+         fonte: [sellout, produtos], curated: [DN_PEN_NIVEL_CAT, DN_PDV_CAT_MASCARA],
+         liga: ["col:pen_recorrencia.recorrencia", "col:pen_recorrencia.sem_compra_mes", "col:pen_distribuidores.recorrencia", "col:pen_distribuidores.sem_compra_mes"],
+         nota: "Denominador próprio (quem já compra a categoria), diferente do da ativação. A comparação com o mesmo mês do ano anterior fica vazia enquanto não houver janela LY na série"}
+      - {id: rtm, rn: [RN-52, RN-54, RN-55], titulo: "Aderência ao direcionamento", indicador: "Aderência, vazamento e ativados parados", abas: [rtm], periodo: mes,
+         formula: "compraram do destino ÷ clientes mensuráveis × 100; vazamento = compraram de outro; ativados parados = já compraram do destino e não no mês",
+         parcelas: [certo, rastreaveis, pct_aderencia, so_outro, sem_compra, ativados, ativados_parados],
+         conta: "{certo} ÷ {rastreaveis} × 100 = {pct_aderencia} · de outro {so_outro} · não compraram {sem_compra} · ativados parados {ativados_parados} de {ativados}",
+         confere: {op: div100, a: certo, b: rastreaveis, r: pct_aderencia},
+         fonte: [rtm, sellout, distribuidores], curated: [DN_RTM_MES, DN_RTM_CLIENTE_MES], liga: ["rtm:aderencia"],
+         nota: "Aderiu quem comprou do destino em qualquer filial. Os clientes com destino não mensurável ficam FORA do denominador e nunca são contados como não comprou (RN-53): hoje são 173, todos por destino sem cadastro. Na visão a partir da migração, os ativados contam desde o corte (RN-54)"}
+  definicoes:                               # Refino E6 (13/09/2026): aba Definições em tabelas por tema (indicador · fórmula · observação)
+    # marcadores: {janela} meses da base ativa, {novos} meses do segmento Novos, {sem_venda} meses sem venda do segmento Sem venda, {p} percentil da referência, {janela_arq} meses no arquivo
+    - tema: "Base e cobertura"
+      itens:
+        - ["PDV positivado", "PDV com sell-out em kg maior que zero no mês", ""]
+        - ["Base ativa", "PDVs positivados em pelo menos um dos últimos {janela} meses", "denominador do DN"]
+        - ["Cobertura", "PDVs positivados no mês", "PDVs compradores"]
+        - ["% de cobertura (DN)", "cobertura ÷ base ativa × 100", ""]
+        - ["Sem compra no mês", "base ativa − cobertura", ""]
+    - tema: "Volume e valor"
+      itens:
+        - ["Volume", "soma do sell-out em kg ÷ 1.000", "toneladas"]
+        - ["Valor", "soma do sell-through em R$ reportado à Mtrix", "não é faturamento Dori"]
+        - ["kg / PDV e R$ / PDV", "volume ou valor ÷ cobertura", ""]
+        - ["Participação", "medida da categoria ÷ medida do canal × 100", ""]
+    - tema: "Frequência"
+      itens:
+        - ["Frequência de compra", "NFs do mês ÷ PDVs compradores", "estimativa: a Mtrix entrega a frequência por SKU; as NFs por PDV são estimadas e calibradas no total da Mtrix"]
+    - tema: "Período e comparativos"
+      itens:
+        - ["vs mês anterior", "(valor ÷ valor do mês anterior − 1) × 100; percentuais em p.p.", "sem par: —"]
+        - ["vs L3M", "comparação com a média dos 3 meses anteriores", ""]
+        - ["vs LY", "comparação com o mesmo mês do ano anterior", "sem par: —"]
+        - ["Acumulado do ano", "soma do início do ano até o mês escolhido", "ano fiscal: set a ago · Ano Calendário: jan a dez"]
+        - ["Ano", "acumulado no último mês do ano; o ano em curso vai até o último mês da série", ""]
+        - ["PDVs distintos no período", "lojas diferentes com compra no período", "não é soma de meses"]
+        - ["O que aconteceu no mês", "diferença absoluta vs o mês anterior: maiores quedas e altas", ""]
+        - ["O que aconteceu no período", "diferença absoluta vs o mesmo período do ano anterior", ""]
+    - tema: "Penetração"
+      itens:
+        - ["Penetração", "PDVs que compraram a categoria ÷ PDVs positivados do nível × 100", "último mês fechado"]
+        - ["Referência", "percentil {p} da penetração dos distribuidores na categoria", "fixa por categoria"]
+        - ["Lojas a positivar", "soma, nos distribuidores abaixo da referência, de (referência − penetração) × positivados ÷ 100", "positivações de categoria, não PDVs"]
+        - ["Potencial de entrada", "lojas a positivar × kg por loja compradora × fator observado", "oportunidade calculada, não previsão"]
+        - ["Potencial em regime", "lojas a positivar × kg por loja compradora", "teto teórico"]
+        - ["A ativar", "base ativa − compradores da categoria nos últimos {janela} meses", ""]
+        - ["Recorrência", "compradores da categoria no mês ÷ compradores nos últimos {janela} meses × 100", ""]
+    - tema: "RTM"
+      itens:
+        - ["Aderência", "clientes que compraram do distribuidor destino ÷ clientes mensuráveis × 100", ""]
+        - ["Compraram de outro", "clientes mensuráveis que compraram só de outro distribuidor", ""]
+        - ["Não compraram", "clientes mensuráveis sem compra no mês", ""]
+        - ["Destino não mensurável", "destino sem cadastro, fora do painel ou sem sell-out", "fora do denominador"]
+        - ["Ativados", "clientes que já compraram do distribuidor destino", ""]
+        - ["Ativados parados", "ativados sem compra do destino no mês", ""]
+    - tema: "Regras de contagem"
+      itens:
+        - ["PDV em mais de um distribuidor", "conta em cada distribuidor e uma vez no canal, no segmento e no supervisor", ""]
+        - ["Supervisor", "N3 da hierarquia de hoje, aplicado a toda a série", ""]
+        - ["Segmento", "Base atual: mais de {novos} meses de histórico e venda nos últimos {sem_venda} meses · Novos: até {novos} meses · Sem venda: nenhum kg vendido nos últimos {sem_venda} meses (o histórico deles continua no canal)", ""]
+        - ["Mês parcial", "mês em andamento, com os dados da última leitura das bases", "comparativos contra meses cheios"]
+        - ["Histórico", "últimos {janela_arq} meses da Mtrix", ""]
+        - ["Carteira de PDVs ponderados", "linhas da planilha ponderada válidas pela regra de CNPJ", "Destaque e Prime"]
+  # 16/09/2026 (Douglas): o filtro "Situação" da tabela de Pontos de venda fica só com Todos da base ativa · Sem compra no mês ·
+  # Positivados no mês · Clientes RTM. As opções por categoria (a ativar, na janela sem compra, no mês, positivados sem a categoria;
+  # 4 x 10 categorias) confundiam; true volta a mostrá-las. O drill da aba Penetração (oculta) continua funcionando.
+  pdv_situacoes_por_categoria: false
+  pdv_carteira:                             # RN-56 (11/09/2026, P5–P7): botões da carteira na tabela de Pontos de venda
+    ativo: true
+    padrao: todos                           # Q1: a aba abria em Destaque; 16/09/2026 (Douglas, Etapa 2): abre em Todos os PDVs "por enquanto"
+    rotulo: "Carteira"
+    opcoes: [[destaque, "Destaque"], [prime, "Prime"], [todos, "Todos os PDVs"]]
+    textos:
+      nota: "Carteira {cluster}: {validos} PDVs válidos de {total} na planilha · {fora} fora da regra (linha e motivo em data/dn/quality/carteira_pdv.md)"
+      nota_todos: "Carteira ponderada: {validos} PDVs válidos de {total} linhas da planilha ({detalhe}); os botões filtram a lista"
+      fora_base: "Da carteira {cluster}, sem compra nos últimos 6 meses e por isso fora desta lista: {lista}"
+      definicoes: "A aba Pontos de venda abre na carteira Destaque; os botões Destaque, Prime e Todos os PDVs filtram a lista (RN-56). A carteira vem de DE-PARA_Ponderada_Clusters.xlsx: uma linha entra quando o distribuidor está no painel, o PDV existe na Mtrix e esse distribuidor já vendeu para ele em algum mês da série; as linhas fora da regra ficam listadas em data/dn/quality/carteira_pdv.md, e razão social diferente da Mtrix é só aviso. Os atalhos de outras abas para esta lista abrem em Todos os PDVs."
+  pdv_categoria:                            # RN-38 (A.14/D32) — fase F6
+    embutir_mascara: sim                    # medir | sim | nao — F7 (RN-38): medida na F6 em 0,19 MB (20 bits: 0,29 MB), embutida desde a F7
+    limite_mb: 1
+
+distribuicao:                               # Etapa 2 (aprovada 16/09/2026): um painel por usuário, no modelo dos Gerenciais (`Dashboard - Gerencial`)
+  ativo: true
+  destino: "../../../Painéis Comerciais/Gerencial"   # relativo à raiz do projeto (DN/); a pasta de cada usuário é o rótulo da hierarquia
+  niveis: {N1: HEAD, N2: GERENTE, N3: SUPERVISOR}  # coluna de DIM_DISTRIBUIDOR de cada nível; os usuários são descobertos dos distribuidores do painel
+  prefixo: "Scorecard_DN_"                  # arquivo = prefixo + nível + _ + slug do rótulo + .html (nome estável, como nos Gerenciais)
+  ignorar_rotulos: []                       # rótulos que não geram painel (ex.: postos vagos). Q3: gerar para todos
+  criar_pasta: true                         # pasta do usuário inexistente: criar (false = registrar erro e seguir)
+  em_erro: continuar                        # continuar = gera e publica os que passaram, registra o erro dos outros e sai com exit 1
+                                            # abortar_publicacao = gera todos, mas não publica nenhum se algum falhou
+                                            # parar = interrompe no primeiro erro (nada publicado)
+  rotulo_canal: "{rotulo}"                  # nome do "canal" no painel do usuário ({rotulo}, {nome}, {codigo}); o Head recebe o painel do canal
+  gravar_json: false                        # também gravar o painel_dn.json de cada usuário na pasta local (35 MB cada)
+  # Q1: benchmark P75, cortes, kg/R$ por loja do canal e fator observado da Penetração vêm do canal inteiro (c["pen_canal"])
+  # Q2: no RTM do usuário só os clientes cujo destino (pela chave) é um distribuidor dele; os sem cadastro ficam no canal
+  # Q4: `Painéis Comerciais/DN/Scorecard_DN.html` continua sendo o painel do canal; o N1 recebe uma cópia idêntica na pasta dele
+  # Q5: carteira de PDVs ponderados só com pares dos distribuidores do usuário; relatório de qualidade só na execução do canal
+
+publicacao:                                 # Fase 5 (padrão de `Painéis Comerciais`: só HTML, nome estável, sem mês)
+  pasta: "../../../Painéis Comerciais/DN"      # Etapa 2 (16/09/2026): relativo à raiz do projeto (DN/), sem depender da máquina; era absoluto
+  arquivo: "Scorecard_DN.html"
+  publicar_mes_em_andamento: true            # Refino E4a (D2, 13/09/2026): o parcial é publicado junto com o último mês fechado (antes: false)
+  pular_se_identico: true                    # P6 (15/09/2026): se o publicado já tem o mesmo md5 do gerado, nada é copiado (o OneDrive não ressincroniza)

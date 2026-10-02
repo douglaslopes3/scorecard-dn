@@ -1,0 +1,34 @@
+# Dados — nunca versionados (volume e confidencialidade: PDVs, CNPJs, valores)
+bases/
+data/
+
+# Template: os arquivos de exemplo levam dados reais do painel (CNPJs, valores). Ficam no disco (o pipeline se valida
+# contra eles; Scorecard_DN_base.html e example-data*.json saem de `python run_dn.py --regerar-exemplo`), fora do git.
+# Só o template.html (o molde da página) é versionado.
+template/*
+!template/template.html
+
+# Credenciais
+*.env
+.env
+secrets*
+credenciais*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Sistema
+Thumbs.db
+desktop.ini
+~$*
+*.tmp
+
+# Ferramentas locais da IA (caminho absoluto da maquina)
+.claude/
+
+# Material fora de uso aguardando exclusao (nunca versionado)
+_arquivo/
