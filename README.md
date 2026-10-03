@@ -48,7 +48,7 @@ bases/ (raw)  Sell Out - MTRIX/*.xlsx · Clusters_DePara · DE-PARA_Ponderada_Cl
                validação essencial + vazamento + soma dos níveis, publicado em Painéis Comerciais/Gerencial/<rótulo>/ (~6 min)
 ```
 
-Desenho do fluxo completo (fontes, etapas, publicação, quem abre): `docs/fluxo_paineis.png`.
+Desenho do fluxo dos 3 painéis (bases compartilhadas, comandos, publicação, agenda): [Fluxo dos Painéis Comerciais](https://claude.ai/artifact/2GtTgvnYJjdDsCGZs3hYZG).
 
 Código em `dn/`: `pipeline.py`, `metrics.py` (métricas e acumulados), `painel.py` (JSON do painel), `tabelas.py` (tabelas e pacotes
 comprimidos), `render.py` (Handlebars mínimo e prova do template), `manifesto.py`, `extract/`, `transform/`, `load/`, `utils/`.
