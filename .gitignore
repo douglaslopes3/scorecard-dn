@@ -29,6 +29,3 @@ desktop.ini
 
 # Ferramentas locais da IA (caminho absoluto da maquina)
 .claude/
-
-# Material fora de uso aguardando exclusao (nunca versionado)
-_arquivo/
