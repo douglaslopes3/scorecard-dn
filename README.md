@@ -104,6 +104,12 @@ byte; depois de editar o template, `python run_dn.py --regerar-exemplo` uma vez.
 `template/data-inventory.json`. Coluna nova que o navegador lê precisa aparecer como literal no template (os pacotes levam só as
 colunas usadas; as `acum_*` entram por prefixo).
 
+**Identidade visual Dori | Ferrara (oficial desde 07/10/2026):** o template continua no visual original (azul) e é contra ele que o
+renderizador se prova. No fim de `pipeline.gerar`, `dn/identidade.py` aplica o layout da marca ao HTML final: paleta oficial no lugar
+das cores do DN, Poppins, cabeçalho branco com círculos e logo, rodapé com o selo de `identidade.selo` e o marcador de vazio "—"
+trocado por "-" (também dentro dos pacotes comprimidos). Fontes, logo e CSS ficam em `template/dori/` e vão embutidos no HTML.
+Cor nova no template precisa entrar no `MAPA` de `identidade.py`. `identidade.ativo: false` volta ao visual anterior.
+
 ## Publicação e rotina
 
 - A pasta `Painéis Comerciais/DN` contém só `Scorecard_DN.html`. Compartilhar a **pasta** com pessoas específicas, *Pode exibir*;

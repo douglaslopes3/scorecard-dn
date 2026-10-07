@@ -765,6 +765,10 @@ distribuicao:                               # Etapa 2 (aprovada 16/09/2026): um 
   # Q4: `Painéis Comerciais/DN/Scorecard_DN.html` continua sendo o painel do canal; o N1 recebe uma cópia idêntica na pasta dele
   # Q5: carteira de PDVs ponderados só com pares dos distribuidores do usuário; relatório de qualidade só na execução do canal
 
+identidade:                                 # 07/10/2026: layout Dori | Ferrara oficial (era a prévia de 06/10). dn/identidade.py + template/dori/
+  ativo: true                               # false = volta ao visual azul anterior (mesmo HTML de antes, sem marca)
+  selo: "Scorecard DN · uso interno"        # texto do selo à direita do rodapé (vazio = sem selo)
+
 publicacao:                                 # Fase 5 (padrão de `Painéis Comerciais`: só HTML, nome estável, sem mês)
   pasta: "../../../Painéis Comerciais/DN"      # Etapa 2 (16/09/2026): relativo à raiz do projeto (DN/), sem depender da máquina; era absoluto
   arquivo: "Scorecard_DN.html"

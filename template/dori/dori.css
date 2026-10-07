@@ -1,0 +1,28 @@
+/* Identidade visual Dori | Ferrara do Scorecard DN (oficial desde 07/10/2026; era a prévia de 06/10).
+   As cores são trocadas no código pelo mapa de dn/identidade.py; aqui entram fonte, cabeçalho branco com a marca e rodapé.
+   Fontes e logo vêm desta pasta e são embutidos no HTML (o painel abre sem rede). */
+@font-face{font-family:'Poppins';font-weight:400;font-style:normal;font-display:swap;src:url(fonts/Poppins-Regular.woff2) format('woff2')}
+@font-face{font-family:'Poppins';font-weight:700;font-style:normal;font-display:swap;src:url(fonts/Poppins-Bold.woff2) format('woff2')}
+body,button,input,select,textarea{font-family:'Poppins','Segoe UI',Arial,sans-serif!important}
+/* gráficos em SVG (DN): garante Poppins mesmo se algum texto vier com fonte própria */
+svg text,svg tspan{font-family:'Poppins','Segoe UI',Arial,sans-serif!important}
+
+.top{position:relative;background:#FFFFFF!important;color:#3D2B70!important;border-bottom:1px solid #E3E1EA;padding-left:92px!important;min-height:66px;overflow:hidden}
+.top .dori-circ{position:absolute;left:0;top:0;width:78px;height:66px}
+.top h1{color:#3D2B70!important;font-size:18px!important}
+.top h1 small{color:#767676!important;opacity:1!important}
+.top .topinfo{color:#767676!important;opacity:1!important}
+.top .tag{color:#FFFFFF!important}
+.top .dori-logo{height:28px;width:auto;display:block;flex:0 0 auto}
+/* título numa linha; o selo longo (DN) quebra em 2 linhas em vez de empurrar o logo para baixo */
+.top{flex-wrap:nowrap!important;align-items:center!important}
+.top h1{flex:0 0 auto;white-space:nowrap}
+.top .tag{flex:0 1 auto;min-width:0;white-space:normal;line-height:1.35;text-align:center}
+
+.dori-rodape{margin:26px 0 8px;border-top:1px solid #BDBDBD;padding-top:10px;display:flex;align-items:center;gap:12px}
+.dori-rodape b{display:block;font-size:12.5px;font-weight:700;color:#626262}
+.dori-rodape span.l2{display:block;font-size:11px;color:#626262}
+.dori-rodape .esp{flex:1}
+.dori-rodape .selo{background:#ECE9F3;color:#3D2B70;border-radius:999px;padding:3px 10px;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.dori-ico{display:inline-block;vertical-align:-1px;margin-left:4px}
+@media print{.dori-rodape{display:none}}

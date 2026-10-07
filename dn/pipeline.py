@@ -215,7 +215,7 @@ def renderizar(c: dict, T: dict, regerar_exemplo: bool, c2: dict | None = None, 
         if not render.validar_renderer():
             abortar("o renderizador Python NAO reproduz o exemplo recem-gerado (template/Scorecard_DN_base.html)")
         log("renderizador validado contra template/Scorecard_DN_base.html (byte a byte)", "ok")
-        html = render.render(render.template(), JF)
+        html = _identidade(render.render(render.template(), JF))
     alvo = PASTA_PAINEL / f"Scorecard_DN_{c['mes_ref']}.html"
     alvo.write_text(html, encoding="utf-8")
     log(f"painel -> {alvo} ({len(html.encode('utf-8')) / 1024 / 1024:.1f} MB)", "ok")
@@ -271,8 +271,14 @@ def gerar(c: dict, T: dict, c2: dict | None = None, T2: dict | None = None, prov
             abortar("o renderizador Python NAO reproduz o exemplo do template (template/Scorecard_DN_base.html).\n"
                     "  Mexeu no template? Rode `python run_dn.py --regerar-exemplo` uma vez.")
         log("renderizador validado contra template/Scorecard_DN_base.html (byte a byte)", "ok")
-    html = render.render(render.template(), JF)
+    html = _identidade(render.render(render.template(), JF))
     return J, JF, html
+
+
+def _identidade(html: str) -> str:
+    """Layout oficial Dori | Ferrara (07/10/2026, era a prévia de 06/10): aplicado no HTML final, antes das validações."""
+    from . import identidade
+    return identidade.aplicar(html) if (CFG.get("identidade") or {}).get("ativo", True) else html
 
 
 # ============================================================== 4 · validar

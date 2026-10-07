@@ -7,6 +7,7 @@ data/
 # Só o template.html (o molde da página) é versionado.
 template/*
 !template/template.html
+!template/dori/
 
 # Credenciais
 *.env
