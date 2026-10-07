@@ -12,6 +12,14 @@ frequência) está nos documentos da §7; esta página traz só o que vale hoje.
   "—" → "-" inclusive nos pacotes comprimidos). Recursos em `template/dori/`, embutidos no HTML. Config: `identidade.ativo` e `identidade.selo`
   ("Scorecard DN · uso interno"). Conferido: reproduz a prévia byte a byte; 116/116 validações; 18 usuários sem erro; 14,1 MB. **Publicado 07/10/2026 ~11h** (canal md5 `4b230962…` + 18 usuários), mesmos números da publicação das 09h48 (set/26: base ativa 134.206 · positivados 71.823 · DN 53,5% · 1.314,4 t).
 - Cor nova no template precisa entrar no `MAPA` de `identidade.py` (senão aparece com a cor antiga).
+- **Out/26 entrou (07/10/2026, tarde):** extração de 07/10 09h44 (41.441 linhas, 69 distribuidores, OUTRO 0,18%) saiu de
+  `fontes.sellout.arquivos_ignorados` (lista vazia). Publicado canal md5 `5542419c…` (15,9 MB, 120 validações) + 18 usuários:
+  out/26 parcial (base ativa 129.348 · positivados 6.430 · DN 5,0% · 93,1 t · 69 distribuidores) e set/26 como último fechado.
+- **Dois defeitos latentes de 02/10 corrigidos** (o caminho "mês em andamento" não rodava desde o segmento Sem venda, porque out/26
+  estava ignorado): (1) a validação "mês fechado · cards do canal" ainda comparava com todos os distribuidores do painel (81); agora
+  compara com os que têm linha na fato no mês, como a validação principal (72 em set/26); (2) `distribuicao.recortar` não levava
+  `vendas_dist` e os 17 painéis de gerente/supervisor caíam com `KeyError` no mês fechado. Números não mudaram.
+- Tempo normal do run: ≈ 7,5 min com a máquina livre (os 14–21 min de 07/10 foram concorrência com ROTA e Gerencial rodando juntos).
 
 ## 0. Atualização de 02–03/10/2026 (ler antes da §1, que é de 22/09)
 

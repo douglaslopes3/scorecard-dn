@@ -95,7 +95,8 @@ def recortar(c: dict, u: dict) -> dict:
     """`c` do usuario: fato e distribuidores so do recorte; codigos, pares e base ativa refeitos para o recorte (rapido: e um
     subconjunto). A referencia da Penetracao (`pen_canal`) e a do canal (Q1)."""
     dists = set(u["dists"])
-    cu = {k: c[k] for k in ("pdv", "prod", "cal", "meses", "mes_ref", "freq_calib", "janela")}
+    # 07/10/2026: + vendas_dist (meses com venda por distribuidor, RN-14 Sem venda): o mes fechado do usuario (2b) precisa dele
+    cu = {k: c[k] for k in ("pdv", "prod", "cal", "meses", "mes_ref", "freq_calib", "janela", "vendas_dist")}
     cu["dist"] = c["dist"][c["dist"]["CNPJ_DISTRIBUIDOR"].astype(str).isin(dists)].copy()
     f = c["fato"]
     cu["fato"] = f[f["DIST"].isin(dists).to_numpy()]

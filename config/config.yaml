@@ -42,8 +42,8 @@ fontes:
     # 09/09/2026: jul/26 foi reextraído e voltou para a carga; a lista está vazia.
     # 02/10/2026 (Douglas, opção A): out/26 fora até chegar extração maior — 467 linhas, 7 distribuidores; 7 linhas
     # "VENDAS A VISTA" da ARRUDA (PDV 00000000000000001) = 1,5% > pdv_outro_max_pct. Tirar daqui quando o arquivo crescer.
-    arquivos_ignorados:
-      "ScoreCard_Mtrix_10.2026.xlsx": "extração de 02/10/2026 com 7 distribuidores; fora até chegar extração maior (Douglas, 02/10/2026)"
+    # 07/10/2026: extração de out/26 do dia (41.441 linhas, 69 distribuidores, OUTRO 0,18%) voltou para a carga; lista vazia.
+    arquivos_ignorados: {}
     colunas_obrigatorias:
       - "CNPJ do AD."
       - "Agente de Distribuição"

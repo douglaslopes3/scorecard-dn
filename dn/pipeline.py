@@ -1017,10 +1017,13 @@ def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
         i2 = c2_["meses"].index(mp_); jan_ = c2_["meses"][i2 - c["janela"] + 1:i2 + 1]
         ba2 = f_[(f_["PESO_KG"] > 0) & (f_["ANO_MES"].isin(jan_))]["COD_PDV"].nunique()
         kg2 = float(f_[f_["ANO_MES"] == mp_]["PESO_KG"].sum()); rs2 = float(f_[f_["ANO_MES"] == mp_]["RECEITA"].sum())
+        # 07/10/2026: mesma regra da validacao "distribuidores no painel" desde 02/10 (RN-14, segmento Sem venda): a tabela do mes
+        # fechado tem exatamente os distribuidores com linha na fato no mes (antes comparava com todos os do painel)
+        com2_ = set(f_.loc[f_["ANO_MES"] == mp_, "DIST"].astype(str))
         cond2 = (k2_["cobertura_pdv"] == pos2 and k2_["base_ativa"] == ba2 and abs(float(k2_["volume_t"]) * 1000 - kg2) < 0.5
-                 and abs(float(k2_["receita_rs"]) - rs2) <= float(CFG["validacao"]["tolerancia_receita_reais"]) and len(J2_["distribuidores"]) == int((c["dist"]["NO_PAINEL"] & c["dist"]["TEM_SELLOUT"]).sum()))
+                 and abs(float(k2_["receita_rs"]) - rs2) <= float(CFG["validacao"]["tolerancia_receita_reais"]) and {d_["cnpj"] for d_ in J2_["distribuidores"]} == com2_)
         ok("mes fechado · cards do canal = fato", cond2,
-           f"{rot2am_inv(mp_)}: positivados {k2_['cobertura_pdv']:,} = {pos2:,} · base ativa {k2_['base_ativa']:,.0f} = {ba2:,} · {float(k2_['volume_t']):,.1f} t · R$ {float(k2_['receita_rs']):,.0f} · {len(J2_['distribuidores'])} distribuidores")
+           f"{rot2am_inv(mp_)}: positivados {k2_['cobertura_pdv']:,} = {pos2:,} · base ativa {k2_['base_ativa']:,.0f} = {ba2:,} · {float(k2_['volume_t']):,.1f} t · R$ {float(k2_['receita_rs']):,.0f} · {len(J2_['distribuidores'])} distribuidores = {len(com2_)} com linha no mes")
         r2_ = J2_["rtm"]; kk2 = r2_["kpi"]
         ano2 = int(c2_["cal"].set_index("ANO_MES").loc[mp_, "ANO"]); jan2 = [m_ for m_ in c2_["meses"] if m_.startswith(str(ano2))]
         pd2 = f_[(f_["PESO_KG"] > 0) & (f_["ANO_MES"].isin(jan2))]["COD_PDV"].nunique()
