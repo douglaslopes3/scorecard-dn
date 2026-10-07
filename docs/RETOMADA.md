@@ -4,6 +4,15 @@ Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 
+## 0a. Layout Dori | Ferrara oficial (07/10/2026, D-88)
+
+- A prévia visual de 06/10 (feita junto com Gerencial, ROTA e Cadastro Turbinado, skill `paineis-html-dori`) virou o layout oficial do DN.
+- Como funciona: `template/template.html` segue no visual azul (o renderizador continua se provando byte a byte contra ele); no fim de
+  `pipeline.gerar`, `dn/identidade.py` aplica a marca ao HTML final (paleta, Poppins, cabeçalho com círculos e logo, rodapé com selo,
+  "—" → "-" inclusive nos pacotes comprimidos). Recursos em `template/dori/`, embutidos no HTML. Config: `identidade.ativo` e `identidade.selo`
+  ("Scorecard DN · uso interno"). Conferido: reproduz a prévia byte a byte; 116/116 validações; 18 usuários sem erro; 14,1 MB. **Publicado 07/10/2026 ~11h** (canal md5 `4b230962…` + 18 usuários), mesmos números da publicação das 09h48 (set/26: base ativa 134.206 · positivados 71.823 · DN 53,5% · 1.314,4 t).
+- Cor nova no template precisa entrar no `MAPA` de `identidade.py` (senão aparece com a cor antiga).
+
 ## 0. Atualização de 02–03/10/2026 (ler antes da §1, que é de 22/09)
 
 - **Pastas:** o projeto mudou para `Documentos/PAINÉIS - SCORECARDS/Painéis - Alavancas/DN` (junto com ROTA e `Dashboard - Gerencial`). Publicação em `../../../Painéis Comerciais/...`.
