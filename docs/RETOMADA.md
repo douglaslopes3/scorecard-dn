@@ -9,6 +9,7 @@ frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 - O Douglas subiu `Hierarquia_20261014.xlsx` em `bases compartilhadas/`. Formato novo: aba `Export` (era `Hierarquia Vendas`), N4 virou `Vendedor Novo (N4)` (o DN não lê o N4), código do N2 com zero à esquerda (`011000`, nome `_VAGO (11000)`) e 2 linhas de rodapé sem cliente.
 - Ajustes: `fontes.hierarquia.aba: "Export"`; `dn/extract/cadastros.py` ganhou `_sem_zero()` (código do rótulo sem zero à esquerda, comparação numérica com o "(código)" do nome), a mesma regra do Gerencial (D-90 de lá). Sem isso o rótulo do N2 viraria `011000 - _VAGO (11000)` e a pasta de publicação do gerente mudaria. A contagem "fora do padrão" ignora linha sem cliente.
 - Medido com o leitor: rótulos N1/N2/N3 da base nova = base de 01/10 (4/12/58, nenhum novo, nenhum sumido); 17.922 → 17.996 clientes.
+- **Publicado 14/10/2026 ~10h55** com o ok do Douglas: canal (16,2 MB, md5 conferido pelo pipeline) + 18 usuários (MD5 18/18 = pasta local), 0 erro, soma N2 = canal. set/26 igual à publicação de 07/10 (base ativa 134.206 · positivados 71.823 · 1.314,4 t · 72 distribuidores); out/26 parcial: base ativa 130.110 · positivados 18.843 · DN 14,5% · 258,9 t · 71 distribuidores. A troca de hierarquia releu os 26 meses da Mtrix (~24 min na 1ª execução).
 
 ## 0a. Layout Dori | Ferrara oficial (07/10/2026, D-88)
 
