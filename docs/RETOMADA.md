@@ -4,6 +4,12 @@ Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 
+## 0b. Hierarquia de 14/10/2026 (export novo)
+
+- O Douglas subiu `Hierarquia_20261014.xlsx` em `bases compartilhadas/`. Formato novo: aba `Export` (era `Hierarquia Vendas`), N4 virou `Vendedor Novo (N4)` (o DN não lê o N4), código do N2 com zero à esquerda (`011000`, nome `_VAGO (11000)`) e 2 linhas de rodapé sem cliente.
+- Ajustes: `fontes.hierarquia.aba: "Export"`; `dn/extract/cadastros.py` ganhou `_sem_zero()` (código do rótulo sem zero à esquerda, comparação numérica com o "(código)" do nome), a mesma regra do Gerencial (D-90 de lá). Sem isso o rótulo do N2 viraria `011000 - _VAGO (11000)` e a pasta de publicação do gerente mudaria. A contagem "fora do padrão" ignora linha sem cliente.
+- Medido com o leitor: rótulos N1/N2/N3 da base nova = base de 01/10 (4/12/58, nenhum novo, nenhum sumido); 17.922 → 17.996 clientes.
+
 ## 0a. Layout Dori | Ferrara oficial (07/10/2026, D-88)
 
 - A prévia visual de 06/10 (feita junto com Gerencial, ROTA e Cadastro Turbinado, skill `paineis-html-dori`) virou o layout oficial do DN.

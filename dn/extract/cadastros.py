@@ -174,9 +174,17 @@ def arquivo_hierarquia() -> Path:
 # Cada nivel vira UM rotulo "codigo - nome" (02/10/2026, mesmo formato no Gerencial e no ROTA). O nome e limpo
 # quando termina com "(codigo)" igual ao codigo da linha: sai o "(codigo)" e o "_" inicial (regra unica dos tres
 # paineis, decisao R2 de 02/10/2026); fora disso entra como veio.
+# 14/10/2026 (Hierarquia_20261014, mesma regra do Gerencial D-90): o codigo numerico vem com zero a esquerda
+# ("011000" no N2, nome "(11000)"); o codigo do rotulo perde o zero e a comparacao com o "(codigo)" do nome e
+# numerica, para o rotulo (e a pasta do usuario) ficar igual ao da base de 01/10 ("11000 - VAGO").
+def _sem_zero(cod: pd.Series) -> pd.Series:
+    num = cod.str.fullmatch(r"\d+").fillna(False)
+    return cod.where(~num, cod.str.lstrip("0").replace({"": "0"}))
+
+
 def _nome_limpo(cod: pd.Series, nome: pd.Series) -> tuple[pd.Series, pd.Series]:
     partes = nome.str.extract(r"^_?(.+?)\s*\(\s*(\d+)\s*\)$")
-    casa = partes[0].notna() & (partes[1] == cod)
+    casa = partes[0].notna() & (_sem_zero(partes[1].astype("string")) == cod)
     return nome.where(~casa, partes[0].str.strip()), casa.fillna(False)
 
 
@@ -188,10 +196,12 @@ def _ler_hierarquia(arq: Path) -> tuple[pd.DataFrame, dict]:
     out["COD_CLIENTE"] = digitos(df[_HIER["coluna_cliente"]])
     fora_padrao = {}
     for destino, (c_cod, c_nome) in niveis.items():
-        cod = texto(df[c_cod], maiuscula=False)
+        cod = _sem_zero(texto(df[c_cod], maiuscula=False))
         nome, limpo = _nome_limpo(cod, texto(df[c_nome], maiuscula=False))
         out[destino] = (cod.fillna("") + (" - " + nome).fillna("")).str.strip(" -").replace({"": pd.NA})
-        fora_padrao[destino] = sorted(out.loc[~limpo, destino].dropna().unique().tolist())
+        # linha sem cliente (rodape "Filtros aplicados" do export de 14/10) nao conta como rotulo fora do padrao
+        fora_padrao[destino] = sorted(out.loc[~limpo & out["COD_CLIENTE"].notna(), destino]
+                                      .dropna().unique().tolist())
     out = out.dropna(subset=["COD_CLIENTE"])
     conflito = out.groupby("COD_CLIENTE")["SUPERVISOR"].nunique()
     extra = {"conflitos_supervisor": int((conflito > 1).sum()), "linhas_brutas": int(len(df)),

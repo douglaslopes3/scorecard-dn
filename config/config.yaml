@@ -101,7 +101,9 @@ fontes:
     pasta: "../../bases compartilhadas"     # relativo à raiz do projeto (DN/)
     padrao: "Hierarquia_*.xlsx"
     data_regex: "^Hierarquia_(\\d{8})\\.xlsx$"
-    aba: "Hierarquia Vendas"
+    # 14/10/2026: Hierarquia_20261014 veio do export novo, aba "Export" (N4, que o DN nao le, virou "Vendedor Novo (N4)";
+    # codigo do N2 com zero a esquerda, normalizado no rotulo por _sem_zero; 2 linhas de rodape sem cliente, descartadas).
+    aba: "Export"
     coluna_cliente: "Cód. cliente"
     niveis:                                 # nível -> [coluna do código, coluna do nome]
       HEAD: ["Cód. Head Vendas (N1)", "Nome Head Vendas (N1)"]
