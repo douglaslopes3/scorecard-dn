@@ -12,7 +12,10 @@ Como funciona
   3. cada painel e validado (essencial + vazamento) e gravado na pasta local; so no fim os que passaram sao publicados,
      cada copia atomica e so quando o md5 muda;
   4. o Head (N1) recebe uma copia identica do painel do canal (Q4);
-  5. falha em um usuario nao interrompe os demais (`distribuicao.em_erro`).
+  5. falha em um usuario nao interrompe os demais (`distribuicao.em_erro`);
+  6. copias extras (21/10/2026, `distribuicao.copias_extras`): o painel publicado de um nivel (hoje o N1, o Head) vai TAMBEM
+     para uma pasta fixa relativa ao destino — `Painéis Comerciais/Gerencial/Dashboard - Full/Scorecard_DN.html`, para o
+     Santarosa acompanhar. Mesmas regras da copia (atomica, md5 conferido, so quando muda).
 
 Regras aprovadas: Q1 referencia da Penetracao e a do canal (`c["pen_canal"]`); Q2 RTM do usuario so com clientes cujo destino
 e um distribuidor dele; Q3 postos vagos tambem recebem painel; Q5 carteira so com pares do usuario, relatorio so no canal.
@@ -277,6 +280,41 @@ def publicar_usuario(res: dict, destino_base: Path) -> dict:
     return res
 
 
+def publicar_extras(resultados: list[dict], destino_base: Path, filtro: str | None) -> list[dict]:
+    """21/10/2026: `distribuicao.copias_extras` = lista de {nivel, pasta, arquivo}. Copia o painel do usuario daquele nivel para
+    `destino_base/pasta/arquivo`. Exige exatamente 1 usuario do nivel entre os gerados, e que ele tenha sido publicado (ou ja
+    estivesse igual): se o painel dele nao foi publicado, a copia extra tambem nao e (o arquivo anterior continua na pasta).
+    Com --usuario sem esse nivel no filtro, a copia e pulada sem erro."""
+    out = []
+    for cx in _D.get("copias_extras") or []:
+        nivel, pasta = str(cx["nivel"]), str(cx["pasta"])
+        arquivo = str(cx.get("arquivo") or (CFG.get("publicacao") or {}).get("arquivo") or "Scorecard_DN.html")
+        cand = [r for r in resultados if r["nivel"] == nivel]
+        ex = {"nivel": nivel, "rotulo": f"{nivel} -> {pasta}", "pasta": pasta_usuario(pasta), "arquivo": arquivo, "erros": []}
+        if not cand and filtro:
+            ex["publicacao"] = "pulada (--usuario sem o nivel)"
+            log(f"copia extra {nivel} -> {pasta}/{arquivo}: pulada (--usuario '{filtro}' nao inclui o {nivel})", "ok")
+        elif len(cand) != 1:
+            ex["publicacao"] = "erro"
+            ex["erros"].append(f"copia extra exige 1 usuario {nivel}; ha {len(cand)} ({', '.join(r['rotulo'] for r in cand)})")
+        elif cand[0].get("publicacao") not in ("publicado", "sem mudanca"):
+            ex["publicacao"] = "nao publicado"
+            log(f"copia extra {cand[0]['rotulo']} -> {pasta}/{arquivo}: NAO publicada (o painel do {nivel} nao foi publicado); "
+                f"o arquivo anterior (se existir) continua na pasta", "aviso")
+        else:
+            ex.update({"rotulo": f"{cand[0]['rotulo']} -> {pasta}", "html": cand[0]["html"], "md5": cand[0]["md5"]})
+            try:
+                publicar_usuario(ex, destino_base)
+            except OSError as e:
+                ex["publicacao"] = f"erro: {e}"; ex["erros"].append(f"publicacao: {e}")
+        if ex["erros"]:
+            log(f"copia extra {ex['rotulo']}: {ex['erros'][0]}", "erro")
+        elif ex.get("destino"):
+            log(f"copia extra {ex['rotulo']:<44} {ex['publicacao']} -> {ex['destino']}", "ok")
+        out.append(ex)
+    return out
+
+
 # ------------------------------------------------------------------ orquestracao
 def executar(c: dict, T: dict, html_canal: str, sem_publicar: bool, filtro: str | None = None) -> dict:
     L.etapa_inicio("6 · distribuir (um painel por usuario)")
@@ -326,11 +364,14 @@ def executar(c: dict, T: dict, html_canal: str, sem_publicar: bool, filtro: str 
                 publicar_usuario(r, destino_base)
             except OSError as e:
                 r["publicacao"] = f"erro: {e}"; r["erros"].append(f"publicacao: {e}")
+    extras = [] if sem_publicar else publicar_extras(resultados, destino_base, filtro)
+    erros_extras = [f"{x['rotulo']}: {e}" for x in extras for e in x["erros"]]
     n_pub = sum(1 for r in resultados if r.get("publicacao") == "publicado")
     n_igual = sum(1 for r in resultados if r.get("publicacao") == "sem mudanca")
     resumo = {"usuarios": [{k: v for k, v in r.items() if k not in ("canal_mes", "canal_cat_mes")} for r in resultados],
-              "somas": checks_soma, "erros": [f"{r['rotulo']}: {e}" for r in com_erro for e in r["erros"]] + erros_soma,
-              "publicados": n_pub, "sem_mudanca": n_igual, "com_erro": len(com_erro)}
+              "somas": checks_soma, "erros": [f"{r['rotulo']}: {e}" for r in com_erro for e in r["erros"]] + erros_soma + erros_extras,
+              "publicados": n_pub, "sem_mudanca": n_igual, "com_erro": len(com_erro),
+              "copias_extras": [{k: v for k, v in x.items() if k != "html"} for x in extras]}
     log(f"usuarios: {len(resultados)} gerados · {len(com_erro)} com erro · {n_pub} publicados · {n_igual} sem mudanca", "ok" if not com_erro else "erro")
     L.etapa_fim("ok" if not com_erro and not erros_soma else "erro", usuarios=len(resultados), com_erro=len(com_erro), publicados=n_pub)
     return resumo

@@ -762,6 +762,14 @@ distribuicao:                               # Etapa 2 (aprovada 16/09/2026): um 
                                             # parar = interrompe no primeiro erro (nada publicado)
   rotulo_canal: "{rotulo}"                  # nome do "canal" no painel do usuário ({rotulo}, {nome}, {codigo}); o Head recebe o painel do canal
   gravar_json: false                        # também gravar o painel_dn.json de cada usuário na pasta local (35 MB cada)
+  # 21/10/2026 (Douglas): o painel do Head (N1 = o do canal, Q4) vai TAMBÉM para `Gerencial/Dashboard - Full`, para o Santarosa
+  # acompanhar (mesmo padrão do ROTA, D-65 de lá). `pasta` é relativa ao `destino`; `arquivo` = nome estável na pasta (sem nível/slug,
+  # como o Dashboard_Gerencial.html e o Painel_Rota.html dessa pasta). Exige 1 usuário do nível; só copia se o painel dele foi
+  # publicado (ou já estava igual); com --usuario sem o nível, pula. Lista vazia = sem cópias extras.
+  copias_extras:
+    - nivel: N1
+      pasta: "Dashboard - Full"
+      arquivo: "Scorecard_DN.html"
   # Q1: benchmark P75, cortes, kg/R$ por loja do canal e fator observado da Penetração vêm do canal inteiro (c["pen_canal"])
   # Q2: no RTM do usuário só os clientes cujo destino (pela chave) é um distribuidor dele; os sem cadastro ficam no canal
   # Q4: `Painéis Comerciais/DN/Scorecard_DN.html` continua sendo o painel do canal; o N1 recebe uma cópia idêntica na pasta dele

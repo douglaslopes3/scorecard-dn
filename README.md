@@ -46,6 +46,8 @@ bases/ (raw)  Sell Out - MTRIX/*.xlsx · Clusters_DePara · DE-PARA_Ponderada_Cl
 5 publicar     cópia atômica para Painéis Comerciais/DN/Scorecard_DN.html (md5 conferido; nada copiado se o md5 não mudou) — só se tudo validou
 6 distribuir   Etapa 2: um painel por usuário da hierarquia (1 head, 3 gerentes, 14 supervisores), fato recortada antes de tudo,
                validação essencial + vazamento + soma dos níveis, publicado em Painéis Comerciais/Gerencial/<rótulo>/ (~6 min)
+               + cópia do painel do Head (N1) em Painéis Comerciais/Gerencial/Dashboard - Full/Scorecard_DN.html, para o Santarosa
+                 (21/10/2026, `distribuicao.copias_extras`; só quando o painel do N1 foi publicado)
 ```
 
 Desenho do fluxo dos 3 painéis (bases compartilhadas, comandos, publicação, agenda): [Fluxo dos Painéis Comerciais](https://claude.ai/artifact/2GtTgvnYJjdDsCGZs3hYZG).

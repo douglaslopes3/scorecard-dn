@@ -4,6 +4,16 @@ Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 
+## 0c. Versão do Head também em `Gerencial/Dashboard - Full` (21/10/2026)
+
+- Pedido do Douglas: "publicar a versão do head na pasta [Dashboard - Full] para o Santarosa acompanhar" (mesmo pedido feito no ROTA, D-65 de lá).
+- `distribuicao.copias_extras` no config (`nivel: N1`, `pasta: "Dashboard - Full"`, `arquivo: "Scorecard_DN.html"`): depois de publicar os
+  usuários, `distribuicao.publicar_extras` copia o painel do N1 (= o do canal, Q4) para `Painéis Comerciais/Gerencial/Dashboard - Full/Scorecard_DN.html`,
+  ao lado do `Dashboard_Gerencial.html`, `Cadastro_Turbinado.html` e `Painel_Rota.html` (não tocados). Mesma cópia atômica, md5 conferido, "sem mudanca".
+- Regras: exige 1 usuário N1; se o painel do N1 não foi publicado (erro, `--sem-publicar`, bloqueio por soma), a cópia extra também não é e o
+  arquivo anterior fica; `--usuario` sem o N1 pula a cópia sem erro; erro da cópia entra em `distribuicao.erros` (exit 1). Log: linha
+  `copia extra 10 - MICHEL -> Dashboard - Full  publicado -> …`. Resumo da execução: `distribuicao.copias_extras`. Desligar: `copias_extras: []`.
+
 ## 0b. Hierarquia de 14/10/2026 (export novo)
 
 - O Douglas subiu `Hierarquia_20261014.xlsx` em `bases compartilhadas/`. Formato novo: aba `Export` (era `Hierarquia Vendas`), N4 virou `Vendedor Novo (N4)` (o DN não lê o N4), código do N2 com zero à esquerda (`011000`, nome `_VAGO (11000)`) e 2 linhas de rodapé sem cliente.
