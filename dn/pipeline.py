@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Orquestrador do Scorecard DN — as seis etapas do `run_dn.py` (D1 da reforma, 09/09/2026).
+"""Orquestrador do Scorecard DN — as etapas do `run_dn.py` (D1 da reforma, 09/09/2026).
 
     0 verificar   config, bases e manifesto (decide se a ingestão precisa rodar)
     1 ingerir     raw (bases/) -> staging (cache) -> curated (Parquet)      [pulada se nada mudou]
     2 calcular    métricas DN_* a partir da curated
     3 renderizar  JSON do painel + HTML (Handlebars mínimo validado byte a byte)
     4 validar     placeholders, tamanho, totais, RTM, manifesto, blob
-    5 publicar    copia o HTML para a pasta de publicação (Painéis Comerciais/DN)
+    6 distribuir  um painel por usuário (dn/distribuicao.py)
+
+26/10/2026: a etapa 5 (cópia do HTML do canal para `Painéis Comerciais/DN`) saiu; a pasta foi
+descontinuada. O HTML do canal fica em `projeto.pasta_painel`.
 
 Qualquer falha aborta com mensagem clara e exit 1; nada é publicado com validação
 pendente. Ao final grava `data/dn/logs/resumo_<execução>.json`.
@@ -15,11 +18,8 @@ from __future__ import annotations
 
 import base64
 import gzip
-import hashlib
 import json
-import os
 import re
-import shutil
 from pathlib import Path
 
 import numpy as np
@@ -55,9 +55,6 @@ def verificar(forcar: bool) -> dict:
     for chave in ("janela_base_ativa_meses", "segmento_novos_meses"):
         if int(CFG["regras"][chave]) <= 0:
             problemas.append(f"regras.{chave} precisa ser > 0")
-    pub = CFG.get("publicacao") or {}
-    if not pub.get("pasta") or not pub.get("arquivo"):
-        problemas.append("publicacao.pasta e publicacao.arquivo sao obrigatorios")
     if problemas:
         abortar("config invalido:\n  " + "\n  ".join(problemas) + "\n  (config/config.yaml)")
     bases = manifesto.bases_declaradas()
@@ -282,14 +279,6 @@ def _identidade(html: str) -> str:
 
 
 # ============================================================== 4 · validar
-def _md5(p: Path) -> str:
-    h = hashlib.md5()
-    with open(p, "rb") as f:
-        for bloco in iter(lambda: f.read(1 << 20), b""):
-            h.update(bloco)
-    return h.hexdigest()
-
-
 def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
     L.etapa_inicio("4 · validar")
     erros: list[str] = []
@@ -1223,42 +1212,6 @@ def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
     return checks
 
 
-# ============================================================= 5 · publicar
-def publicar(origem: Path) -> Path:
-    L.etapa_inicio("5 · publicar")
-    pub = CFG["publicacao"]
-    pasta = caminho(pub["pasta"])
-    try:
-        pasta.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        abortar(f"nao foi possivel criar a pasta de publicacao {pasta}: {e}",
-                situacao="curated e HTML gerados; NADA publicado.")
-    destino = pasta / pub["arquivo"]
-    estranhos = sorted(x.name for x in pasta.iterdir() if x.name != pub["arquivo"] and not x.name.startswith("~$"))
-    if estranhos:
-        log(f"pasta de publicacao tem {len(estranhos)} item(ns) alem de {pub['arquivo']} (nao removidos; "
-            f"a pasta deveria conter so o painel): {estranhos[:8]}", "aviso")
-    md5_origem = _md5(origem)
-    # P6 (Etapa 1): conteudo identico ao ja publicado = nada a copiar (evita ressincronizacao do OneDrive e arquivo "em uso")
-    if bool(pub.get("pular_se_identico", True)) and destino.exists() and destino.stat().st_size == origem.stat().st_size \
-            and _md5(destino) == md5_origem:
-        log(f"publicado sem mudanca: {destino} ja tem o mesmo conteudo (md5 {md5_origem[:8]}…); nada copiado", "ok")
-        L.etapa_fim("ok", destino=str(destino), md5=md5_origem, bytes=destino.stat().st_size, itens_estranhos=estranhos, copiado=False)
-        return destino
-    tmp = pasta / (pub["arquivo"] + ".tmp")
-    try:
-        shutil.copyfile(origem, tmp)
-        os.replace(tmp, destino)
-    except OSError as e:
-        abortar(f"falha ao copiar para {destino}: {e}", situacao="curated e HTML gerados; NADA publicado.")
-    md5_destino = _md5(destino)
-    if md5_origem != md5_destino or origem.stat().st_size != destino.stat().st_size:
-        abortar(f"o arquivo publicado difere do gerado: {destino}", situacao="publicacao CORROMPIDA; rode de novo.")
-    log(f"publicado -> {destino} ({destino.stat().st_size / 1024 / 1024:.1f} MB, md5 conferido)", "ok")
-    L.etapa_fim("ok", destino=str(destino), md5=md5_destino, bytes=destino.stat().st_size, itens_estranhos=estranhos, copiado=True)
-    return destino
-
-
 # ================================================================ resumo
 def gravar_resumo(extra: dict) -> Path:
     r = {"execucao": L.EXECUCAO_ID, "inicio": L.INICIO.isoformat(timespec="seconds"),
@@ -1293,21 +1246,8 @@ def executar(mes: str | None, sem_publicar: bool, forcar: bool, regerar_exemplo:
     c2, T2 = calcular_fechado(c, T)   # Refino E4a
     J, JF, alvo, html = renderizar(c, T, regerar_exemplo, c2, T2)
     checks = validar(c, T, J, html, alvo)
-    destino = None
     parcial = bool(J["periodo"].get("mes_em_andamento"))
     pode_parcial = bool((CFG.get("publicacao") or {}).get("publicar_mes_em_andamento", False))
-    if sem_publicar:
-        L.etapa_inicio("5 · publicar")
-        log("pulada: --sem-publicar", "ok")
-        L.etapa_fim("pulada", motivo="--sem-publicar")
-    elif parcial and not pode_parcial:
-        # 10/09/2026: mes parcial nao substitui o ultimo mes fechado que o time ja ve
-        L.etapa_inicio("5 · publicar")
-        log(f"pulada: {c['mes_ref']} esta em andamento e publicacao.publicar_mes_em_andamento e false — "
-            f"o publicado continua sendo o ultimo mes fechado; o parcial ficou em {alvo}", "aviso")
-        L.etapa_fim("pulada", motivo="mes em andamento")
-    else:
-        destino = publicar(alvo)
 
     # Etapa 2 (16/09/2026): um painel por usuario da hierarquia, no modelo dos Gerenciais
     dist_resumo = None
@@ -1325,9 +1265,7 @@ def executar(mes: str | None, sem_publicar: bool, forcar: bool, regerar_exemplo:
     resumo = gravar_resumo({"ingestao": {"executada": diff["precisa_ingerir"], "motivo": diff["motivo"],
                                          "resumo_curated": ingestao},
                             "validacao": checks, "numeros": numeros,
-                            "html": str(alvo), "publicado": str(destino) if destino else None,
-                            "publicado_md5": _md5(destino) if destino else None,
-                            "publicado_bytes": destino.stat().st_size if destino else None,
+                            "html": str(alvo),
                             "dados_atualizados_em": J["meta_execucao"]["dados_atualizados_em"],
                             "distribuicao": dist_resumo})
     L.titulo("FIM")
@@ -1335,8 +1273,7 @@ def executar(mes: str | None, sem_publicar: bool, forcar: bool, regerar_exemplo:
         f"DN {k['pct_cobertura']:.1f}% · volume {k['volume_t']:,.1f} t · {len(J['distribuidores'])} distribuidores · "
         f"RTM {J['rtm']['base_total']}/{J['rtm']['rastreaveis']}/{J['rtm']['nao_mensuravel']}", "ok")
     log(f"{len(L.avisos())} aviso(s) · resumo -> {resumo}", "ok")
-    _motivo = "--sem-publicar" if sem_publicar else (f"{c['mes_ref']} em andamento" if parcial else "nao publicado")
-    log(f"publicado em {destino}" if destino else f"nao publicado ({_motivo})", "ok")
+    log(f"painel do canal em {alvo}", "ok")
     L.fechar()
     if dist_resumo and dist_resumo.get("erros"):
         print(f"PAINEIS POR USUARIO COM ERRO: {len(dist_resumo['erros'])} (o painel do canal foi gerado; veja o log)")

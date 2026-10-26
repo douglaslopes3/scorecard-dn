@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """Scorecard DN · ponto único de execução.
 
-    python run_dn.py                    tudo: verificar -> ingerir (se preciso) -> calcular -> renderizar -> validar -> publicar
+    python run_dn.py                    tudo: verificar -> ingerir (se preciso) -> calcular -> renderizar -> validar -> distribuir
     python run_dn.py --mes 2026-06      mês de referência específico
-    python run_dn.py --sem-publicar     gera e valida, não copia para a pasta de publicação
+    python run_dn.py --sem-publicar     gera e valida, não publica os painéis por usuário
     python run_dn.py --forcar           ignora cache e manifesto: relê todas as bases
     python run_dn.py --regerar-exemplo  regrava o exemplo do template (só depois de editar template/template.html)
 
 Saídas: data/dn/curated/ (Parquet + manifesto.json), data/dn/painel/ (JSON + HTML datado),
-data/dn/quality/, data/dn/logs/ (log + resumo da execução) e o HTML publicado
-(config: publicacao.pasta/arquivo). Exit code 1 e "PIPELINE ABORTADO" em qualquer falha.
+data/dn/quality/, data/dn/logs/ (log + resumo da execução) e os painéis por usuário
+(config: distribuicao.destino). Exit code 1 e "PIPELINE ABORTADO" em qualquer falha.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ for _f in (sys.stdout, sys.stderr):
 def main() -> int:
     ap = argparse.ArgumentParser(description="Scorecard DN · pipeline único")
     ap.add_argument("--mes", metavar="AAAA-MM", help="mês de referência (padrão: painel.mes_referencia ou o último da série)")
-    ap.add_argument("--sem-publicar", action="store_true", help="não copia o HTML para a pasta de publicação")
+    ap.add_argument("--sem-publicar", action="store_true", help="não publica os painéis por usuário")
     ap.add_argument("--forcar", action="store_true", help="relê todas as bases mesmo sem mudança")
     ap.add_argument("--regerar-exemplo", action="store_true", help="regrava template/example-data*.json e Scorecard_DN_base.html")
     ap.add_argument("--usuario", metavar="CODIGO|TEXTO", help="Etapa 2: gera só o painel do usuário cujo rótulo contém o texto (ex.: 1120)")

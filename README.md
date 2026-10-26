@@ -14,8 +14,8 @@ do ano · Ano (com o ano em curso). **Publicado em 14/09/2026 22h03** (`docs/est
 
 ```powershell
 cd "C:\Users\dldsouza\OneDrive - Dori Alimentos S.A\Documentos\Painéis - Alavancas\DN"
-python run_dn.py                    # tudo: verificar -> ingerir (se preciso) -> calcular -> renderizar -> validar -> publicar
-python run_dn.py --sem-publicar     # gera e valida, sem copiar para a pasta de publicação
+python run_dn.py                    # tudo: verificar -> ingerir (se preciso) -> calcular -> renderizar -> validar -> distribuir
+python run_dn.py --sem-publicar     # gera e valida, sem publicar os painéis por usuário
 python run_dn.py --mes 2026-08      # arquivo com um mês de referência fixo (sem o parcial)
 python run_dn.py --forcar           # relê todas as bases mesmo sem mudança
 python run_dn.py --regerar-exemplo  # uma vez, depois de editar template/template.html
@@ -27,7 +27,7 @@ python run_dn.py --sem-usuarios     # Etapa 2: sem os painéis por usuário nest
   mês fechado ~20 s, renderização ~45 s, validação ~30 s; era ~17 min). Depois de uma ingestão a primeira execução soma ~15 s
   (calibração da frequência refeita). Com um mês novo da Mtrix ou um de-para alterado, a ingestão soma ~1 a 6 min.
 - O JSON e o HTML datado de cada execução nascem em `%LOCALAPPDATA%\Dori\DN\painel` (`projeto.pasta_painel`), fora do OneDrive;
-  só o HTML publicado vai para a pasta sincronizada.
+  só os painéis por usuário vão para a pasta sincronizada (`distribuicao.destino`).
 - **Com o arquivo do mês corrente em `bases/`, `python run_dn.py` publica o parcial** (com o último mês fechado dentro).
 - Qualquer falha termina com `PIPELINE ABORTADO`, exit code 1, e **nada é publicado**.
 
@@ -43,7 +43,7 @@ bases/ (raw)  Sell Out - MTRIX/*.xlsx · Clusters_DePara · DE-PARA_Ponderada_Cl
 2b mês fechado com o mês de referência em andamento: base ativa dos PDVs, carteira, máscara e RTM refeitos para o mês fechado
 3 renderizar   painel_dn.json + Scorecard_DN_<mês>.html (pasta local): mês de referência, mês fechado e o histórico (montado dos cubos)
 4 validar      120 conferências (cards = fato, cubos, pacotes comprimidos, lista de PDVs combinada, acumulados, RTM, frequência…)
-5 publicar     cópia atômica para Painéis Comerciais/DN/Scorecard_DN.html (md5 conferido; nada copiado se o md5 não mudou) — só se tudo validou
+5 (removida em 26/10/2026: a cópia para Painéis Comerciais/DN saiu; a pasta foi descontinuada)
 6 distribuir   Etapa 2: um painel por usuário da hierarquia (1 head, 3 gerentes, 14 supervisores), fato recortada antes de tudo,
                validação essencial + vazamento + soma dos níveis, publicado em Painéis Comerciais/Gerencial/<rótulo>/ (~6 min)
                + cópia do painel do Head (N1) em Painéis Comerciais/Gerencial/Dashboard - Full/Scorecard_DN.html, para o Santarosa
@@ -91,8 +91,7 @@ calculada uma vez (`metrics.preparar_codigos`) e `painel.montar` consulta índic
 | `regras.penetracao.*` · `regras.potencial.*` | P75 · foco · 95/70 · fator observado | Penetração |
 | `regras.rtm.*` | corte 01/09/2026 | RTM |
 | `validacao.html_max_mb` | 20 | limite do HTML (15 até 15/09/2026) |
-| `publicacao.pasta` / `arquivo` | Painéis Comerciais/DN · Scorecard_DN.html | destino |
-| `publicacao.pular_se_identico` | true | não copia quando o publicado já tem o mesmo md5 (Etapa 1, 15/09/2026) |
+| `publicacao.pular_se_identico` | true | não copia o painel do usuário quando o publicado já tem o mesmo md5 (Etapa 1, 15/09/2026) |
 | `projeto.pasta_painel` | `%LOCALAPPDATA%/Dori/DN/painel` | pasta local do JSON e do HTML datado (null = `data/dn/painel`, no OneDrive) |
 | `recursos.prioridade` / `threads` | abaixo_do_normal · 4 | prioridade do processo no Windows e threads do pyarrow/numpy (0 = padrão) |
 | `distribuicao.*` | ativo · destino `../../Painéis Comerciais/Gerencial` · níveis N1/N2/N3 · `em_erro: continuar` | Etapa 2 (16/09/2026): painéis por usuário; ver `docs/distribuicao_etapa2.md` |
@@ -114,8 +113,9 @@ Cor nova no template precisa entrar no `MAPA` de `identidade.py`. `identidade.at
 
 ## Publicação e rotina
 
-- A pasta `Painéis Comerciais/DN` contém só `Scorecard_DN.html`. Compartilhar a **pasta** com pessoas específicas, *Pode exibir*;
-  nunca "qualquer pessoa com o link" (o HTML embute CNPJ, razão social e endereço).
+- 26/10/2026: a pasta `Painéis Comerciais/DN` foi descontinuada e o pipeline não copia mais nada para ela. O painel do canal fica em
+  `projeto.pasta_painel` e chega ao time pela cópia do Head (N1) em `Painéis Comerciais/Gerencial`. Compartilhar as **pastas** com
+  pessoas específicas, *Pode exibir*; nunca "qualquer pessoa com o link" (o HTML embute CNPJ, razão social e endereço).
 - Abrir no Chrome ou Edge (Ctrl+F5). "atualizado em" = data da última leitura das bases.
 
 | Quando | Passos |
@@ -167,6 +167,6 @@ Cor nova no template precisa entrar no `MAPA` de `identidade.py`. `identidade.at
 1. Data de cadastro dos 6 distribuidores ainda censurados.
 2. Destinos RTM sem cadastro: NOVO RIBEIRÃO PRETO (91), NOVO SJRP (75), DIBS (6), NOVA ENERGIA (1).
 3. CNPJs das 124 linhas fora da carteira de PDVs ponderados; linha 179 × 41 e linha 177.
-4. Compartilhar `Painéis Comerciais/DN` com o time depois da publicação.
+4. ~~Compartilhar `Painéis Comerciais/DN` com o time~~ — pasta descontinuada em 26/10/2026.
 5. Tamanho: com a janela de 25 meses o HTML fica em ~14,9 MB e cresce ~0,2 a 0,3 MB por mês (limite 20 MB desde 15/09/2026). Backlog: lista de PDVs em colunas (−1,7 MB).
 6. Filtro de Gerente Regional com números próprios (nível novo no pipeline): estudo em `docs/estabilizacao_2026-09-14.md`, backlog.

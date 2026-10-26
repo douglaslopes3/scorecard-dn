@@ -8,7 +8,7 @@ projeto:
   pasta_dados: data/dn          # staging/, curated/, quality/ ficam aqui
   pasta_logs: data/dn/logs
   # Etapa 1 · performance (P6, 15/09/2026): o JSON (35 MB) e o HTML datado (15 MB) de cada execução são gerados numa pasta
-  # LOCAL, fora do OneDrive; só o HTML publicado vai para a pasta sincronizada (publicacao.pasta). Aceita variáveis de
+  # LOCAL, fora do OneDrive; só os HTMLs publicados vão para a pasta sincronizada (distribuicao.destino). Aceita variáveis de
   # ambiente (%LOCALAPPDATA%). null = data/dn/painel (comportamento anterior, dentro do OneDrive).
   pasta_painel: "%LOCALAPPDATA%/Dori/DN/painel"
 
@@ -772,15 +772,13 @@ distribuicao:                               # Etapa 2 (aprovada 16/09/2026): um 
       arquivo: "Scorecard_DN.html"
   # Q1: benchmark P75, cortes, kg/R$ por loja do canal e fator observado da Penetração vêm do canal inteiro (c["pen_canal"])
   # Q2: no RTM do usuário só os clientes cujo destino (pela chave) é um distribuidor dele; os sem cadastro ficam no canal
-  # Q4: `Painéis Comerciais/DN/Scorecard_DN.html` continua sendo o painel do canal; o N1 recebe uma cópia idêntica na pasta dele
+  # Q4: o N1 recebe uma cópia idêntica do painel do canal na pasta dele
   # Q5: carteira de PDVs ponderados só com pares dos distribuidores do usuário; relatório de qualidade só na execução do canal
 
 identidade:                                 # 07/10/2026: layout Dori | Ferrara oficial (era a prévia de 06/10). dn/identidade.py + template/dori/
   ativo: true                               # false = volta ao visual azul anterior (mesmo HTML de antes, sem marca)
   selo: "Scorecard DN · uso interno"        # texto do selo à direita do rodapé (vazio = sem selo)
 
-publicacao:                                 # Fase 5 (padrão de `Painéis Comerciais`: só HTML, nome estável, sem mês)
-  pasta: "../../../Painéis Comerciais/DN"      # Etapa 2 (16/09/2026): relativo à raiz do projeto (DN/), sem depender da máquina; era absoluto
-  arquivo: "Scorecard_DN.html"
+publicacao:                                 # 26/10/2026: `pasta`/`arquivo` (cópia do canal para `Painéis Comerciais/DN`) saíram; a pasta foi descontinuada
   publicar_mes_em_andamento: true            # Refino E4a (D2, 13/09/2026): o parcial é publicado junto com o último mês fechado (antes: false)
   pular_se_identico: true                    # P6 (15/09/2026): se o publicado já tem o mesmo md5 do gerado, nada é copiado (o OneDrive não ressincroniza)

@@ -4,6 +4,15 @@ Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 
+## 0d. Pasta `Painéis Comerciais/DN` descontinuada (26/10/2026)
+
+- Pedido do Douglas: a pasta deixa de existir; o projeto não publica, copia nem gera nada nela. A pasta física não foi apagada.
+- Saiu a etapa 5 (`pipeline.publicar`) e as chaves `publicacao.pasta` / `publicacao.arquivo`. Ficam `publicacao.publicar_mes_em_andamento`
+  e `publicacao.pular_se_identico`, que valem para os painéis por usuário. `--sem-publicar` agora só segura a publicação desses painéis.
+- O painel do canal continua gerado em `projeto.pasta_painel` e validado; o N1 (= canal, Q4) segue para `Gerencial/<rótulo>/` e
+  `Gerencial/Dashboard - Full/`. O resumo da execução não tem mais `publicado`, `publicado_md5` e `publicado_bytes`.
+- Os documentos datados (reforma, evolução, rodadas, estabilização) citam a pasta como histórico e não foram alterados.
+
 ## 0c. Versão do Head também em `Gerencial/Dashboard - Full` (21/10/2026)
 
 - Pedido do Douglas: "publicar a versão do head na pasta [Dashboard - Full] para o Santarosa acompanhar" (mesmo pedido feito no ROTA, D-65 de lá).
@@ -121,7 +130,7 @@ Fonte única: **`docs/regras_negocio.md`** (fichas RN, com nota de cada etapa do
 | RTM e Pontos de venda | mostram o mês final do período escolhido |
 | Frequência de compra | estimativa (RN-58), rotulada "(estimativa)" |
 | Histórico no arquivo | janela móvel de 25 meses (E6); cálculo usa todos os meses |
-| Publicação | `Painéis Comerciais/DN/Scorecard_DN.html`; compartilhar a **pasta** com pessoas específicas, Pode exibir; nunca "qualquer pessoa com o link" |
+| Publicação | painéis por usuário em `Painéis Comerciais/Gerencial/` (o N1 = canal); `Painéis Comerciais/DN` descontinuada em 26/10/2026 (§0d); compartilhar a **pasta** com pessoas específicas, Pode exibir; nunca "qualquer pessoa com o link" |
 | Carimbo | "atualizado em" = data da última leitura das bases |
 | Pontos de venda (16/09/2026) | abre em Todos os PDVs (`painel.pdv_carteira.padrao: todos`, "por enquanto"); filtro Situação só com Todos · Sem compra · Positivados · Clientes RTM (`painel.pdv_situacoes_por_categoria: false`; as opções por categoria confundiam) |
 | Painel por usuário (16/09/2026) | recorte na fato; Q1 referência da Penetração = canal; Q2 RTM só destinos do recorte; Q3 vagos também; Q4 N1 = cópia do canal; Q5 carteira só do recorte; `em_erro: continuar` |
@@ -132,7 +141,7 @@ Fonte única: **`docs/regras_negocio.md`** (fichas RN, com nota de cada etapa do
 | # | O quê | Quem |
 |---|---|---|
 | 1 | ~~Tamanho do HTML~~ **resolvido 15/09/2026**: `validacao.html_max_mb` 15 → 20 (aprovação A/B/C do Douglas). Medido: a janela móvel não estabiliza o arquivo (pacote de set/24 86 KiB × ago/26 300 KiB, out/26 estouraria os 15); 24 meses ganharia só 86 KiB. Backlog estrutural: lista de PDVs em colunas com cidade/bairro/último mês por índice (medido 8,25 → 6,53 MiB) | — |
-| 2 | Compartilhar `Painéis Comerciais/DN` com o time depois da publicação | Douglas |
+| 2 | ~~Compartilhar `Painéis Comerciais/DN` com o time~~ **superada 26/10/2026**: pasta descontinuada (§0d) | — |
 | 3 | Destinos RTM sem cadastro: NOVO RIBEIRÃO PRETO (91), NOVO SJRP (75), DIBS (6), NOVA ENERGIA (1) | Douglas / cadastro |
 | 4 | ~~Data de cadastro dos 6 distribuidores censurados~~ **superada**: desde 14/09 o log registra 81 distribuidores com data e 0 censurados; em 15/09 Douglas corrigiu a data da PELLAH (2016 → jun/26) | — |
 | 5 | CNPJs das 124 linhas fora da carteira de PDVs ponderados; linha 179 × 41; linha 177 | Douglas |

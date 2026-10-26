@@ -195,7 +195,7 @@ def gerar_usuario(c: dict, T: dict, u: dict, todos: list[dict], html_canal: str,
     t0 = time.perf_counter()
     res = {"nivel": u["nivel"], "rotulo": u["rotulo"], "pasta": u["pasta"], "arquivo": u["arquivo"], "distribuidores": u["n_dist"]}
     if u["nivel"] == "N1":
-        # Q4: o Head recebe o painel do canal, identico ao publicado em Painéis Comerciais/DN
+        # Q4: o Head recebe o painel do canal, identico
         html = html_canal
         res.update({"linhas_fato": int(len(c["fato"])), "pdvs_base_ativa": int(len(T["DN_PDV_BASE_ATIVA"])), "checks": {"copia do canal": "ok"}, "erros": []})
     else:
