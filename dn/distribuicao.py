@@ -94,16 +94,28 @@ def _filtrar(lista: list[dict], filtro: str | None) -> list[dict]:
 
 
 # ------------------------------------------------------------------ recorte
+def _pdv_pos_canal(c: dict) -> dict:
+    """RN-08 (B2): PDVs positivados no canal no mes de referencia e no mes fechado (os dois meses com lista de PDVs), calculados
+    uma vez na fato do canal e guardados em `c`. Vai para o recorte so como conjunto de codigos de PDV (sem distribuidor)."""
+    if "_pdv_pos_canal" not in c:
+        f = c["fato"]
+        ms = sorted({c["mes_ref"], metrics.mes_fechado(c["meses"], c["mes_ref"])})
+        p_ = f.loc[(f["PESO_KG"] > 0).to_numpy() & f["ANO_MES"].isin(ms).to_numpy(), ["ANO_MES", "COD_PDV"]]
+        c["_pdv_pos_canal"] = {m: set(p_.loc[(p_["ANO_MES"] == m).to_numpy(), "COD_PDV"].astype(str)) for m in ms}
+    return c["_pdv_pos_canal"]
+
+
 def recortar(c: dict, u: dict) -> dict:
     """`c` do usuario: fato e distribuidores so do recorte; codigos, pares e base ativa refeitos para o recorte (rapido: e um
     subconjunto). A referencia da Penetracao (`pen_canal`) e a do canal (Q1)."""
     dists = set(u["dists"])
     # 07/10/2026: + vendas_dist (meses com venda por distribuidor, RN-14 Sem venda): o mes fechado do usuario (2b) precisa dele
-    cu = {k: c[k] for k in ("pdv", "prod", "cal", "meses", "mes_ref", "freq_calib", "janela", "vendas_dist")}
+    cu = {k: c[k] for k in ("pdv", "prod", "cal", "meses", "mes_ref", "freq_calib", "janela", "vendas_dist", "cluster_mapa")}   # 28/10/2026: + cluster_mapa (RN-18)
     cu["dist"] = c["dist"][c["dist"]["CNPJ_DISTRIBUIDOR"].astype(str).isin(dists)].copy()
     f = c["fato"]
     cu["fato"] = f[f["DIST"].isin(dists).to_numpy()]
     cu["pen_canal"] = c["pen_canal"]
+    cu["pdv_pos_canal"] = _pdv_pos_canal(c)   # RN-08 (28/10/2026, B2): "comprou de outro distribuidor" vale para o canal inteiro
     cu["recorte"] = {"nivel": u["nivel"], "rotulo": u["rotulo"]}
     cu["recorte_nome"] = str(_D.get("rotulo_canal") or "{rotulo}").format(rotulo=u["rotulo"], nome=u["nome"], codigo=u["codigo"])
     metrics.preparar_codigos(cu)
@@ -166,6 +178,14 @@ def validar_usuario(cu: dict, Tu: dict, Ju: dict, html: str, u: dict, todos: lis
     ok("supervisores · so os do recorte", {s["id"] for s in Ju["supervisores_lista"]} == set(cu["dist"]["SUP_ID"].astype(str)), f"{len(Ju['supervisores_lista'])} no select")
     blob = json.loads(gzip.decompress(base64.b64decode(Ju["pdv_blob"]["b64"])).decode("utf-8"))
     ok("blob de PDVs = base ativa do recorte", len(blob["rows"]) == len(Tu["DN_PDV_BASE_ATIVA"]) == int(Ju["pdv_blob"]["n"]), f"{len(blob['rows']):,} pares")
+    # RN-08 (28/10/2026, B2): "comprou de outro distribuidor" usa os PDVs positivados no CANAL, nao so no recorte
+    pb_ = Tu["DN_PDV_BASE_ATIVA"]; sem_ = ~pb_["positivado_mes"].astype(bool)
+    esp_ = int((sem_ & pb_["COD_PDV"].astype(str).isin(cu["pdv_pos_canal"][mes_ref])).sum())
+    i_o = blob["cols"].index("outro"); blob_o = sum(int(r_[i_o] or 0) for r_ in blob["rows"])
+    ok("pdv · comprou de outro = canal", esp_ == int(pb_["comprou_outro_mes"].astype(bool).sum()) == blob_o,
+       f"{blob_o:,} de {int(sem_.sum()):,} pares sem compra")
+    from .pipeline import _dist_sup_no_mapa
+    ok("pdv · todo distribuidor da lista tem supervisor no mapa", *_dist_sup_no_mapa(html, Ju))   # RN-44 (28/10/2026, 2A)
     r = Ju["rtm"]; soma = int(r["kpi"]["certo"]) + int(r["kpi"]["so_outro"]) + int(r["kpi"]["sem_compra"])
     ok("RTM · estados = rastreaveis e sem nao mensuraveis", soma == int(r["rastreaveis"]) and int(r["nao_mensuravel"]) == 0, f"{soma} = {r['rastreaveis']} · nao mensuraveis {r['nao_mensuravel']}")
     dest_ok = set(Tu["DN_RTM_CLIENTE"]["DESTINO"].astype(str)) <= set(cu["dist"]["NOME_REDUZIDO"].astype(str))

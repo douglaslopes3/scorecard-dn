@@ -167,21 +167,21 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | Oportunidade imediata: quem está na base ativa e não comprou |
-| Definição | Base ativa menos cobertura |
-| Fórmula | `sem_compra_mes = base_ativa − cobertura_pdv` |
-| Base de origem | derivada |
-| Campos usados | — |
-| Granularidade | nível × mês; lista nominal por par em `DN_PDV_BASE_ATIVA` |
-| Filtros aplicáveis | todos; na tabela de PDVs, filtro próprio "Situação" |
-| Exceções | "—" com base ativa nula |
+| Definição | Base ativa menos cobertura. O card conta **PDVs distintos** ("PDVs sem compra no mês"). A lista de Pontos de venda é por **par distribuidor × PDV** e separa os pares sem compra em: **não comprou de ninguém** (o PDV não teve kg > 0 com nenhum distribuidor do canal no mês) e **comprou de outro distribuidor** (o par não comprou, mas o PDV comprou de outro distribuidor do canal no mês). No painel por usuário, "outro distribuidor" é qualquer distribuidor do canal, não só os do recorte; o arquivo leva só o sim/não, sem nome nem CNPJ de quem vendeu |
+| Fórmula | `sem_compra_mes = base_ativa − cobertura_pdv` · por par: `comprou_outro_mes = não positivado no par ∧ PDV positivado no canal no mês` |
+| Base de origem | derivada; o sinal por par sai da fato do canal |
+| Campos usados | `PESO_KG`, `COD_PDV`, `CNPJ_DISTRIBUIDOR`, `ANO_MES` |
+| Granularidade | nível × mês (card); par distribuidor × PDV × mês (lista, `DN_PDV_BASE_ATIVA`) |
+| Filtros aplicáveis | todos; na tabela de PDVs, filtro próprio "Situação" (RN-64) |
+| Exceções | "—" com base ativa nula. Lista sem filtro ou com supervisor: pares sem compra > PDVs sem compra, porque o PDV atendido por mais de um distribuidor aparece uma vez por distribuidor (RN-10); com um distribuidor, card e lista contam o mesmo |
 | Nulos | idem |
 | Zeros | — |
 | Duplicidades | RN-10 |
-| Parametrização | código: `dn/painel.py` |
+| Parametrização | código: `dn/painel.py` (card); `dn/metrics.py::pdvs_base_ativa` (`comprou_outro_mes`, com `c["pdv_pos_canal"]` no recorte), `dn/painel.py::blob_pdvs` (coluna `outro`), `template/template.html` (Situação e resumo da tabela) |
 | Responsável | Douglas |
-| Status | vigente |
-| Aprovação | 08/09/2026 · Fase 3 |
-| Observações | — |
+| Status | vigente · **28/10/2026 (auditoria, opção B, variante B2)**: card renomeado para "PDVs sem compra no mês"; lista separa "não comprou de ninguém" × "comprou de outro distribuidor", com o sinal calculado no canal também nos painéis por usuário; validação `pdv · comprou de outro = recalculo na fato` |
+| Aprovação | 08/09/2026 · Fase 3 · 28/10/2026 · auditoria do painel (opção B, variante B2) |
+| Observações | Medido em 28/10/2026 (out/26 parcial): card 80.604 PDVs; lista 86.026 pares = 83.426 não compraram de ninguém + 2.600 compraram de outro distribuidor. set/26: 62.383 PDVs; 68.282 pares = 64.657 + 3.625. Sem a variante B2, o painel do supervisor 1110 mostraria 2 de 232 pares "comprou de outro" (os demais compraram de distribuidor de outro supervisor) |
 
 ### RN-09 · Unidades fora do painel
 | Campo | Conteúdo |
@@ -299,11 +299,11 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Nulos | censura, nunca inferência |
 | Zeros | — |
 | Duplicidades | — |
-| Parametrização | `regras.segmento_novos_meses: 6`; `regras.segmento_sem_venda_meses: 3`; código `dn/metrics.py::segmento_ids`; `fontes.distribuidores.colunas_opcionais: [Data de Cadastro]` |
+| Parametrização | `regras.segmento_novos_meses: 6`; `regras.segmento_sem_venda_meses: 3`; código `dn/metrics.py::segmento_ids`; `fontes.distribuidores.colunas_opcionais: [Data de Cadastro]`; validação `distribuidores no painel` (`dn/pipeline.py::validar`) |
 | Responsável | Douglas |
-| Status | vigente |
-| Aprovação | 08/09/2026 · rodada 1; 09/09/2026 · C3; 02/10/2026 · Sem venda (Douglas, critério A: vendas, 3 meses) |
-| Observações | 32 dos 64 com data têm 10/12/2013 (carga do ERP). Em set/26: 9 Sem venda (AVANT, CBX, CHUA - Serra ES, IREZ E SIQUEIRA, KRUPER, MDB, MMD, NORTESUL, SBM), todos entre os 10 que ganharam hierarquia em 02/10/2026; 34% dos PDVs deles compraram de outro distribuidor do painel em set/26 |
+| Status | vigente · **28/10/2026 (auditoria, decisões 1A/3A/4)**: (1A) o segmento é o do mês de referência e vale para a série inteira, agora dito na tela: legenda e linha do gráfico "sem venda (hoje)" e Definições; (3A) com o mês de referência fechado, distribuidor sem linha no mês que ainda não é Sem venda (parou há 1 ou 2 meses) deixa de reprovar a validação `distribuidores no painel`: vira aviso no log com o nome e há quantos meses parou; (4) os PDVs que só compravam de distribuidores Sem venda seguem na base ativa (é a perda que a regra mede) |
+| Aprovação | 08/09/2026 · rodada 1; 09/09/2026 · C3; 02/10/2026 · Sem venda (Douglas, critério A: vendas, 3 meses); 28/10/2026 · auditoria do painel (1A, 3A, 4) |
+| Observações | Medido em 28/10/2026: com o segmento de cada mês a faixa "sem venda" do gráfico seria sempre zero (um Sem venda não tem venda no mês); com o de hoje ela mostra a perda (out/25 3.698 PDVs · abr/26 2.092 · jun/26 305 · jul/26 em diante 0). A validação antiga teria reprovado 19 vezes na série, todas no 1º e 2º mês depois de o distribuidor parar (só a IREZ voltou, 11 meses depois). PDVs da base ativa que só compravam de Sem venda: set/26 1.554 (DN 53,52% com eles, 54,14% sem), out/26 parcial 863. 32 dos 64 com data têm 10/12/2013 (carga do ERP). Em set/26: 9 Sem venda (AVANT, CBX, CHUA - Serra ES, IREZ E SIQUEIRA, KRUPER, MDB, MMD, NORTESUL, SBM), todos entre os 10 que ganharam hierarquia em 02/10/2026; 34% dos PDVs deles compraram de outro distribuidor do painel em set/26 |
 
 ### RN-15 · Supervisor
 | Campo | Conteúdo |
@@ -381,8 +381,8 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Duplicidades | 1ª linha vence |
 | Parametrização | `fontes.clusters` |
 | Responsável | Douglas |
-| Status | vigente |
-| Aprovação | 09/09/2026 · C5 |
+| Status | vigente · **28/10/2026 (auditoria)**: a coluna "Cluster" da lista de Pontos de venda passa a seguir o de-para (antes mostrava o Segmento do PDV da Mtrix: 34 valores em vez de 12, rótulo diferente em 126.346 de 138.417 pares em out/26); `metrics.carregar` guarda o de-para em `c["cluster_mapa"]` e `painel.montar` aplica na lista; validação `pdv · cluster da lista = de-para` |
+| Aprovação | 09/09/2026 · C5 · 28/10/2026 · auditoria do painel (cluster da lista pelo de-para) |
 | Observações | O de-para de **PDVs ponderados** (`DE-PARA_Ponderada_Clusters.xlsx`) é outra coisa e está fora do config (adiado) |
 
 ### RN-19 · Categorias foco
@@ -431,7 +431,7 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | Leitura de variação sem meta |
-| Definição | vs mês anterior; vs média dos 3 meses anteriores (só quando os 3 existem); vs mesmo mês do ano anterior por **junção** em `ANO_MES_LY` (nunca por deslocamento de posição). Contagens e medidas em %; % de cobertura em p.p. Ausência = "—" |
+| Definição | vs mês anterior; vs média dos 3 meses anteriores (só quando os 3 existem); vs mesmo mês do ano anterior por **junção** em `ANO_MES_LY` (nunca por deslocamento de posição). **Desde 28/10/2026 o mês anterior e os 3 meses do L3M também são buscados por junção no mês do calendário** (antes: a linha anterior do grupo, que pulava os meses sem venda): se o grupo não tem linha no mês anterior, o "vs mês ant." é "—". Contagens e medidas em %; % de cobertura em p.p. Ausência = "—" |
 | Fórmula | `var = (v ÷ ref − 1) × 100`; `var_pp = v − ref` |
 | Base de origem | `DN_*_MES`, `DIM_CALENDARIO` |
 | Campos usados | `ANO_MES_LY` |
@@ -444,8 +444,8 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Parametrização | código: `dn/metrics.py::comparativos`; desde a F2 os Δ de cada ponto da série vão ao JSON (`*_var_*` por mês) e o gráfico só exibe — `dnVar`/`dnMean` removidos (RK13 fechado) |
 | Responsável | Douglas |
 | Status | vigente · **Refino E3 (13/09/2026, gerado sem publicar)**: as diferenças absolutas vs mês anterior (PDVs positivados, t, R$) saem do pipeline por supervisor, distribuidor e suas linhas por categoria (mês − mês anterior no cubo da linha; sem linha num dos meses = nulo) e alimentam o bloco "O que aconteceu no mês" da Visão Geral (5 maiores quedas e altas, `painel.mes_ranking.n`); validação `mes · diferencas vs mes anterior = cubos` · **Refino E5 (13/09/2026, gerado sem publicar)**: nos modos Acumulado e Ano, "O que aconteceu no período" ordena as diferenças absolutas vs o mesmo período do ano anterior (PDVs distintos, t, R$), calculadas no pipeline |
-| Aprovação | 08/09/2026 · rodada 1; Fase 2 |
-| Observações | LY existe só para jul/26, ago/26, set/26 (parcial) até a Mtrix anterior a jul/25 entrar (pendência D5) |
+| Aprovação | 08/09/2026 · rodada 1; Fase 2 · 28/10/2026 · auditoria do painel (mês anterior pelo calendário) |
+| Observações | LY existe só para jul/26, ago/26, set/26 (parcial) até a Mtrix anterior a jul/25 entrar (pendência D5) · **28/10/2026 (auditoria)**: `metrics.comparativos` troca o `shift` por junção no mês do calendário; validação `comparativos · mes anterior e L3M pelo calendario`. Medido antes da troca: 1 linha distribuidor (nov/25 comparada com nov/24), 123 distribuidor × categoria (3 em set/26, quase todas Compound) e 3 supervisor × categoria comparavam com mês não consecutivo. O ranking "O que aconteceu no mês" já usava o calendário e **ignora distribuidor sem linha no mês** por decisão (distribuidor que parou não é queda; ver RN-14) |
 
 ### RN-22 · Mês sem Last Year
 | Campo | Conteúdo |
@@ -907,8 +907,8 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Duplicidades | — |
 | Parametrização | `painel.abas[].filtros` (visao, evolucao, clusters, distribuidores, pdv), `painel.rotulos.supervisor_todos`; JSON `supervisores_lista`, `distribuidor.supervisor_id`, `categorias_sup`, `evo_sup_json`; template `dnSup()`, `dnCardsAplicar()`, `DN_DIST_SUP`, estado `sup=` |
 | Responsável | Douglas |
-| Status | **vigente** (F4, 10/09/2026). Com supervisor: cards da Visão geral mostram o supervisor no segmento ativo (Q-a); tabela de categorias vira supervisor × categoria; Evolução usa a série do supervisor e o recorte por categoria fica desabilitado com nota (Q-b); evolução por categoria com as séries do supervisor; Distribuidores e PDVs restritos; RTM não age · **Refino E2 (13/09/2026, gerado sem publicar)**: o select de supervisor mora na barra lateral; na aba Pontos de venda e no RTM só aparecem os filtros que valem ali · **Refino E3 (13/09/2026, gerado sem publicar)**: na aba Supervisores e distribuidores, clicar no nome do supervisor filtra os distribuidores dele; na visão Cluster os filtros Supervisor e Distribuidor somem (a tabela de clusters não tem esses recortes) · **22/09/2026 (Douglas, gerado sem publicar)**: o filtro **Distribuidor** passa a agir na Visão Geral (`painel.abas[].filtros`): cards do mês e do acumulado vêm do registro do distribuidor em `tabelas_json.distribuidores` (categoria "Todas"; o distribuidor está num único segmento, então "Todos" usa esse registro e outro segmento dá "Sem dado"); o gráfico mês a mês usa a série `dist-<id>` (sem a linha "mesmo mês LY", RN-22); o ranking "O que aconteceu no mês" fica **oculto** com distribuidor selecionado (decisão do Douglas: uma linha só não tem o que comparar); evolução e tabela por categoria seguem o canal ou o supervisor, com nota; template `dnVgDist()`, `dnDistReg()`. Só navegador, nenhum número ou campo do JSON muda |
-| Aprovação | 10/09/2026 · A.13 (D18, D19) · 22/09/2026 · Douglas (distribuidor na Visão Geral, ranking oculto) |
+| Status | **vigente** (F4, 10/09/2026). Com supervisor: cards da Visão geral mostram o supervisor no segmento ativo (Q-a); tabela de categorias vira supervisor × categoria; Evolução usa a série do supervisor e o recorte por categoria fica desabilitado com nota (Q-b); evolução por categoria com as séries do supervisor; Distribuidores e PDVs restritos; RTM não age · **Refino E2 (13/09/2026, gerado sem publicar)**: o select de supervisor mora na barra lateral; na aba Pontos de venda e no RTM só aparecem os filtros que valem ali · **Refino E3 (13/09/2026, gerado sem publicar)**: na aba Supervisores e distribuidores, clicar no nome do supervisor filtra os distribuidores dele; na visão Cluster os filtros Supervisor e Distribuidor somem (a tabela de clusters não tem esses recortes) · **22/09/2026 (Douglas, gerado sem publicar)**: o filtro **Distribuidor** passa a agir na Visão Geral (`painel.abas[].filtros`): cards do mês e do acumulado vêm do registro do distribuidor em `tabelas_json.distribuidores` (categoria "Todas"; o distribuidor está num único segmento, então "Todos" usa esse registro e outro segmento dá "Sem dado"); o gráfico mês a mês usa a série `dist-<id>` (sem a linha "mesmo mês LY", RN-22); o ranking "O que aconteceu no mês" fica **oculto** com distribuidor selecionado (decisão do Douglas: uma linha só não tem o que comparar); evolução e tabela por categoria seguem o canal ou o supervisor, com nota; template `dnVgDist()`, `dnDistReg()`. Só navegador, nenhum número ou campo do JSON muda · **28/10/2026 (auditoria, decisão 2A)**: o mapa distribuidor → supervisor do navegador (`DN_DIST_SUP`) passa a ter **todos** os distribuidores do painel (JSON `distribuidores_mapa`), não só os com venda no mês: com supervisor na barra, a lista de Pontos de venda mostra também os pares dos distribuidores Sem venda e bate com o card do supervisor (out/26: 1.809 pares voltam, 771 no 1110, 561 no 1230, 477 no 1120). O select de Distribuidor segue só com os que têm venda no mês; validação `pdv · todo distribuidor da lista tem supervisor no mapa` |
+| Aprovação | 10/09/2026 · A.13 (D18, D19) · 22/09/2026 · Douglas (distribuidor na Visão Geral, ranking oculto) · 28/10/2026 · auditoria do painel (2A) |
 | Observações | Multi-seleção não; o nível gerente (N2) seria o caminho para territórios juntos |
 
 ### RN-45 · Filtros × referências
@@ -967,8 +967,8 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Duplicidades | — |
 | Parametrização | `painel.graficos.{evolucao_ly, chave_padrao}`, `painel.rotulos.graf_pdv`, `painel.textos.sem_ly`; JSON `graficos.*`; série com `volume_ly`, `receita_ly` e 12 Δ por ponto; template `dnDraw` (duas chaves), `dnGraf()`, estado `graf=` |
 | Responsável | Douglas |
-| Status | **vigente** (F2, 10/09/2026) |
-| Aprovação | 10/09/2026 · A.11 (D6, D7) |
+| Status | **vigente** (F2, 10/09/2026) · **28/10/2026 (auditoria, item 4, A + B)**: na chave PDVs, o número em cima da barra empilhada passa a ser o **total do nível** (PDVs positivados distintos, o mesmo da linha da tabela), não a soma das camadas; quando as camadas somam mais que o total, a dica da barra diz "camadas somam N: PDV atendido por distribuidores de segmentos diferentes conta em cada camada" (RN-10). Medido antes: soma das camadas − total = 13 a 416 PDVs por mês nos últimos 13 meses |
+| Aprovação | 10/09/2026 · A.11 (D6, D7) · 28/10/2026 · auditoria do painel (item 4, A + B) |
 | Observações | Validações: `serie · LY = mes correspondente` (canal + 5 distribuidores) e `serie · Δ do JSON = curated = recalculo`. Na chave PDVs o Δ% vs LY fica na tabela e no tooltip (Q-c); na chave medida vai sob o mês |
 
 ### RN-48 · Resumos executivos dinâmicos
@@ -1299,7 +1299,7 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | Aba mais direta: abrir na lista completa e reduzir o filtro Situação ao que se usa |
-| Definição | A aba Pontos de venda abre com o botão **Todos os PDVs** ativo em todos os painéis (canal e usuários), "por enquanto". O filtro **Situação** tem só quatro opções: Todos da base ativa · Sem compra no mês · Positivados no mês · Clientes RTM. As opções por categoria de RN-38 (a ativar · na janela sem compra no mês · no mês · positivados sem a categoria, 4 × 10 categorias) saem do select; a máscara PDV × categoria continua embutida e o drill da aba Penetração (oculta) continua funcionando |
+| Definição | A aba Pontos de venda abre com o botão **Todos os PDVs** ativo em todos os painéis (canal e usuários), "por enquanto". O filtro **Situação** tem só quatro opções: Todos da base ativa · Sem compra no mês · Positivados no mês · Clientes RTM (desde 28/10/2026, seis: "Sem compra no mês (todos os pares)" ganha as duas aberturas da RN-08, ver Status). As opções por categoria de RN-38 (a ativar · na janela sem compra no mês · no mês · positivados sem a categoria, 4 × 10 categorias) saem do select; a máscara PDV × categoria continua embutida e o drill da aba Penetração (oculta) continua funcionando |
 | Fórmula | nenhuma: só quais opções o select mostra e qual botão abre ativo |
 | Base de origem | — |
 | Campos usados | `PDV_ROT.sit_cat` (JSON `penetracao.situacoes_por_categoria`) |
@@ -1311,8 +1311,8 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Duplicidades | — |
 | Parametrização | `painel.pdv_carteira.padrao` (todos), `painel.pdv_situacoes_por_categoria` (false); template `template.html` (`dnPdvSituacoes`, `PDV_ROT.sit_cat`), `template/data-inventory.json` (`penetracao.situacoes_por_categoria`); exemplo regerado em 16/09/2026 |
 | Responsável | Douglas |
-| Status | **vigente** (16/09/2026 07h16, publicado com o canal e os 18 usuários) |
-| Aprovação | 16/09/2026 · Douglas: "na aba de Pontos de Vendas pode abrir em todos os PDVs por enquanto" e "deixar apenas Sem compra, positivado no mês, clientes RTM e Todos" |
+| Status | **vigente** (16/09/2026 07h16, publicado com o canal e os 18 usuários) · **28/10/2026 (RN-08 revista, opção B, variante B2)**: o filtro Situação passa a 6 opções: Todos da base ativa · Sem compra no mês (todos os pares) · "· não comprou de ninguém" · "· comprou de outro distribuidor" · Positivados no mês · Clientes RTM. O atalho "sem compra" do ranking segue abrindo em "Sem compra no mês (todos os pares)". O resumo da tabela diz pares e PDVs |
+| Aprovação | 16/09/2026 · Douglas: "na aba de Pontos de Vendas pode abrir em todos os PDVs por enquanto" e "deixar apenas Sem compra, positivado no mês, clientes RTM e Todos" · 28/10/2026 · auditoria do painel (opção B, variante B2) |
 | Observações | Revisa RN-56 (abertura em Destaque) e a exibição de RN-38 no select. Motivo: o usuário sem PDV ponderado abria a aba vazia e as 44 opções confundiam |
 
 ### RN-65 · Média do PDV por mês com compra (tabela de Pontos de venda)

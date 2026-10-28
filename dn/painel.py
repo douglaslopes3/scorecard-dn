@@ -245,13 +245,14 @@ def blob_pdvs(pb: pd.DataFrame, nome_dist: pd.Series, mascara: dict | None = Non
     11 ultimo mes (rotulo), 12 kg ultimo mes, 13 kg janela, 14 rtm,
     15 R$ mes, 16 R$ ultimo mes, 17 R$ janela (F1, RN-06: inteiros, mesmas linhas do kg),
     F7 (RN-38, quando `mascara` vem preenchida): 18 mascara PDV x categoria (bits 0..n-1 = comprou a categoria na
-    janela; bits n..2n-1 = comprou no mes; ordem das categorias em `cats`), 19 novo na janela (PRIMEIRO_MES, A.6)."""
+    janela; bits n..2n-1 = comprou no mes; ordem das categorias em `cats`), 19 novo na janela (PRIMEIRO_MES, A.6).
+    RN-08 (28/10/2026, B2): ultima coluna `outro` = par sem compra cujo PDV comprou de outro distribuidor do canal no mes."""
     import base64
     import gzip
     import json
     dists = sorted(set(nome_dist.dropna()))
     i_d = {d: i for i, d in enumerate(dists)}
-    clusters = sorted(set(pb["SEGMENTO_MTRIX"].fillna("").astype(str)) | {""})
+    clusters = sorted(set(pb["CLUSTER"].fillna("").astype(str)) | {""})   # RN-18 (28/10/2026): cluster do de-para, nao o Segmento Mtrix
     i_c = {c: i for i, c in enumerate(clusters)}
     def _s(v) -> str:
         return "" if v is None or (not isinstance(v, str) and pd.isna(v)) else str(v)
@@ -259,7 +260,7 @@ def blob_pdvs(pb: pd.DataFrame, nome_dist: pd.Series, mascara: dict | None = Non
     # 22/09/2026 (Douglas): a coluna nf_min (RN-58, decisao 2) saiu do blob e da tabela de PDVs
     rows = []
     for r in pb.itertuples(index=False):
-        rows.append([str(r.COD_PDV), _s(r.NOME_PDV), i_d[r.nome_dist], i_c[_s(r.SEGMENTO_MTRIX)],
+        rows.append([str(r.COD_PDV), _s(r.NOME_PDV), i_d[r.nome_dist], i_c[_s(r.CLUSTER)],
                      _s(r.UF), _s(r.CIDADE), _s(r.BAIRRO),
                      None if pd.isna(r.kg_mes) else round(float(r.kg_mes), 1), int(bool(r.positivado_mes)),
                      int(bool(r.positivado_mes_anterior)), int(r.meses_positivado_janela), str(r.ultimo_rot),
@@ -268,10 +269,11 @@ def blob_pdvs(pb: pd.DataFrame, nome_dist: pd.Series, mascara: dict | None = Non
                      None if pd.isna(r.rs_mes) else int(round(float(r.rs_mes))),
                      None if pd.isna(r.rs_ultimo_mes) else int(round(float(r.rs_ultimo_mes))),
                      None if pd.isna(r.rs_janela) else int(round(float(r.rs_janela)))]
-                    + ([int(r.mascara), int(bool(r.novo))] if com_mascara else []))
+                    + ([int(r.mascara), int(bool(r.novo))] if com_mascara else [])
+                    + [int(bool(r.comprou_outro_mes))])
     carga = {"cols": ["cnpj", "nome", "dist", "cluster", "uf", "cidade", "bairro", "kg_mes", "pos_mes", "pos_ant",
                       "meses_janela", "ultimo_mes", "kg_ultimo", "kg_janela", "rtm", "rs_mes", "rs_ultimo", "rs_janela"]
-                     + (["mascara", "novo"] if com_mascara else []),
+                     + (["mascara", "novo"] if com_mascara else []) + ["outro"],
              "dists": dists, "clusters": clusters, "rows": rows}
     if com_mascara:
         carga["cats"] = list(mascara["cats"]); carga["cats_nomes"] = list(mascara["cats_nomes"]); carga["bits"] = int(mascara["bits"])
@@ -853,6 +855,10 @@ def montar(c: dict, T: dict, leve: bool = False) -> dict:
     n_por_sup = dist.groupby("SUP_ID").size().to_dict()
     J["supervisores_lista"] = sorted([{"id": str(k), "nome": str(v), "n_distribuidores": int(n_por_sup.get(k, 0))}
                                       for k, v in sup_nome.items()], key=lambda x: x["nome"])
+    # RN-44 (28/10/2026, 2A): mapa distribuidor -> supervisor do navegador com TODOS os distribuidores do painel (inclusive os sem
+    # linha no mes, como os Sem venda), para o filtro de supervisor da lista de PDVs alcancar os pares deles
+    J["distribuidores_mapa"] = [{"nome": str(n_), "supervisor_id": str(s_)}
+                                for n_, s_ in sorted(set(zip(dist["DISTRIBUIDOR_MTRIX"].astype(str), dist["SUP_ID"].astype(str))))]
     sc_canal = T.get("DN_SUPERVISOR_CANAL_CAT_MES")
     su_tot = T["DN_SUPERVISOR_CANAL_MES"].set_index(["SUP", "ANO_MES"])
     cats_sup, evo_sup = [], {}
@@ -1116,6 +1122,9 @@ def montar(c: dict, T: dict, leve: bool = False) -> dict:
         c["pdv"][["COD_PDV", "NOME_PDV", "UF", "CIDADE", "BAIRRO", "SEGMENTO_MTRIX", "ORIGEM_RTM", "TIPO_CHAVE_PDV"]],
         on="COD_PDV", how="left")
     pb_full["nome_dist"] = pb_full["DIST"].map(attrs["DISTRIBUIDOR_MTRIX"])
+    # RN-18 (28/10/2026): coluna Cluster da lista pelo de-para (o mesmo dos cubos); segmento sem linha no de-para fica com o proprio nome
+    mapa_cl = c.get("cluster_mapa") or {}
+    pb_full["CLUSTER"] = pb_full["SEGMENTO_MTRIX"].map(lambda x: mapa_cl.get(x, x) if isinstance(x, str) else x)
     pb_full["ultimo_rot"] = pb_full["ultimo_mes_compra"].map(rot_of)
     pb_full = pb_full.sort_values(["nome_dist", "kg_janela"], ascending=[True, False])
     # F7 (RN-38, Q-c): mascara PDV x categoria (janela | mes) e flag "novo" embutidas no blob quando o config manda e cabe no limite

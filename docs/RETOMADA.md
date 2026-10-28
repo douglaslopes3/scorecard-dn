@@ -4,6 +4,51 @@ Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 
+## 0g. Comparativos pelo calendário e Cluster da lista pelo de-para (28/10/2026, RN-21/RN-18, itens 2 e 3 da auditoria)
+
+- **Item 2 (RN-21)**: `metrics.comparativos` busca o mês anterior e os 3 do L3M por junção no mês do calendário (antes `shift`, que pulava meses
+  sem linha do grupo). Grupo sem o mês anterior = "—". Validação `comparativos · mes anterior e L3M pelo calendario` (17.498 linhas distribuidor ×
+  categoria; 912 sem o mês anterior). Mudaram só Δ vs mês ant./L3M de linhas com mês faltando (distribuidor × categoria, supervisor/cluster ×
+  categoria; quase tudo L3M que vira "—"); cards e séries do canal iguais.
+- **Item 3 (RN-18)**: coluna Cluster da lista de PDVs pelo de-para (`c["cluster_mapa"]`, também no recorte): 12 clusters em vez de 34 segmentos
+  Mtrix; demais colunas da lista idênticas. Validação `pdv · cluster da lista = de-para`.
+- **Item 4 (RN-47, A + B)**: no gráfico mês a mês (chave PDVs), o número em cima da barra empilhada é o total do nível (= linha "PDVs positivados"
+  da tabela), não a soma das camadas; a dica da barra avisa "camadas somam N: PDV atendido por distribuidores de segmentos diferentes conta em cada
+  camada". set/26: número 71,8k = 71.823 (antes 71.894). Só template; HTML do canal md5 `6a1f9bcc…` (exemplo regerado; 2ª execução igual).
+- **Item 5**: decidido manter o ranking ignorando distribuidor sem linha no mês (parou ≠ queda); registrado na RN-21. **Item 6**: sem mudança.
+- Gerado sem publicar 28/10/2026 ~11h55: HTML do canal md5 `984b696f…`, 18 usuários sem erro, somas N2/N3 = canal. **Publicado 28/10/2026 ~12h25** junto com §0e–§0g (commit D-90): canal md5 `6a1f9bcc…` + 18 usuários + cópia do N1 em Dashboard - Full, md5 conferido 19/19.
+
+## 0f. Segmento Sem venda: tela, filtro de supervisor e validação (28/10/2026, RN-14/RN-44, decisões 1A · 2A · 3A · 4)
+
+- **1A** segmento continua o do mês de referência para a série inteira; agora dito na tela: legenda e linha do gráfico "sem venda (hoje)"
+  e Definições (tema Regras de contagem). Medido: a faixa mostra a perda (out/25 3.698 PDVs → jun/26 305 → 0); com o segmento de cada mês seria sempre zero.
+- **2A** mapa distribuidor → supervisor do navegador (`DN_DIST_SUP`) com todos os distribuidores do painel (JSON `distribuidores_mapa`, novo no
+  `data-inventory.json`). Com supervisor na barra, a lista de PDVs passa a mostrar os pares dos Sem venda (out/26: 1.809; Murilo 1.201 → 1.972,
+  igual ao painel dele). Select de Distribuidor inalterado. Validação nova `pdv · todo distribuidor da lista tem supervisor no mapa` (canal e usuários).
+- **3A** com mês de referência fechado, distribuidor sem linha que parou há 1–2 meses (ainda não Sem venda) não reprova mais `distribuidores no
+  painel`: aviso no log. Testado com `--mes 2026-08`: passou com aviso de 4 (CBX, KRUPER, MMD, NORTESUL, parou há 2 meses); antes reprovaria.
+- **4** PDVs só de Sem venda seguem na base ativa (set/26: 1.554; DN 53,52% com eles, 54,14% sem). Próximo passo natural: tabela de absorção.
+- Conferido (gerado sem publicar, 28/10/2026 ~11h35): JSON = o de antes, salvo Definições, `distribuidores_mapa`, carimbos e a coluna `outro` (§0e);
+  card, DN e cubos iguais; exemplo do template regerado; execução seguinte com o mesmo md5 do HTML do canal (`8166bfb4…`); 18 usuários sem erro;
+  somas N2/N3 = canal. A execução com `--mes 2026-08` regravou a curated e o HTML de ago/26 local; a última execução devolveu a curated a out/26.
+- **Publicado 28/10/2026 ~12h25** junto com §0e–§0g (commit D-90): canal md5 `6a1f9bcc…` + 18 usuários + cópia do N1 em Dashboard - Full, md5 conferido 19/19.
+
+## 0e. "Sem compra no mês": PDVs no card, pares na lista (28/10/2026, RN-08/RN-64, opção B2)
+
+- Origem: auditoria somente leitura de 28/10/2026. O card contava PDVs distintos e a lista de Pontos de venda contava pares
+  distribuidor × PDV com o mesmo nome (out/26: 80.604 × 86.026).
+- Mudou: card "PDVs sem compra no mês" (subtítulo "da base ativa, sem compra de nenhum distribuidor"); Situação com
+  "Sem compra no mês (todos os pares)" · "· não comprou de ninguém" · "· comprou de outro distribuidor"; resumo da tabela com pares e PDVs;
+  Definições com "PDVs sem compra" e "Pares sem compra". Nenhum número do card, do DN ou dos cubos mudou (JSON comparado campo a campo).
+- Como: `metrics.pdvs_base_ativa` grava `comprou_outro_mes` (par sem compra cujo PDV comprou de outro distribuidor do canal no mês);
+  no painel por usuário o conjunto de PDVs positivados vem do canal (`distribuicao._pdv_pos_canal` → `c["pdv_pos_canal"]`), então
+  "outro distribuidor" é qualquer um do canal (B2); o arquivo leva só o sim/não. Blob de PDVs com a coluna `outro` no fim (+22 KB).
+  Validações novas: `pdv · comprou de outro = fato (mês)` no canal (mês de referência e fechado) e `pdv · comprou de outro = canal` por usuário.
+- Medido (gerado sem publicar, 28/10/2026 ~11h): out/26 86.026 pares = 83.426 não compraram de ninguém (80.604 PDVs = card) + 2.600
+  compraram de outro; set/26 68.282 = 64.657 (62.383 PDVs = card) + 3.625. Painel 1110 Murilo: 232 "comprou de outro" (seriam 2 sem a B2).
+  Exemplo do template regerado; segunda execução com o mesmo md5 do HTML do canal (`bd76ba98…`); 18 usuários sem erro; somas N2/N3 = canal.
+- **Publicado 28/10/2026 ~12h25** junto com §0e–§0g (commit D-90): canal md5 `6a1f9bcc…` + 18 usuários + cópia do N1 em Dashboard - Full, md5 conferido 19/19.
+
 ## 0d. Pasta `Painéis Comerciais/DN` descontinuada (26/10/2026)
 
 - Pedido do Douglas: a pasta deixa de existir; o projeto não publica, copia nem gera nada nela. A pasta física não foi apagada.

@@ -187,7 +187,7 @@ def fechado(c: dict, T: dict) -> tuple[dict, dict]:
     T2 = dict(T)
     # (E5: os PDVs distintos do periodo do mes fechado vem de metrics.acum_pdvs_mensal, na renderizacao)
     T2.update(metrics.rtm_aderencia(c2))
-    T2["DN_PDV_BASE_ATIVA"] = metrics.pdvs_base_ativa(c2["fato"], c2["meses"], mp)
+    T2["DN_PDV_BASE_ATIVA"] = metrics.pdvs_base_ativa(c2["fato"], c2["meses"], mp, (c2.get("pdv_pos_canal") or {}).get(mp))   # RN-08 (B2)
     T2["DN_PDV_CARTEIRA"] = metrics.carteira(c2, T2["DN_PDV_BASE_ATIVA"])
     pen = metrics.penetracao(c2, T2)
     T2["DN_PDV_CAT_MASCARA"] = pen["DN_PDV_CAT_MASCARA"]; T2["DN_PEN_META"] = pen["DN_PEN_META"]
@@ -279,6 +279,16 @@ def _identidade(html: str) -> str:
 
 
 # ============================================================== 4 · validar
+def _dist_sup_no_mapa(html: str, J: dict) -> tuple[bool, str]:
+    """RN-44 (28/10/2026, 2A): o filtro de supervisor da lista de PDVs acha o supervisor de cada par pelo nome do distribuidor no
+    mapa `DN_DIST_SUP` do HTML. Todo nome da lista combinada (mes de referencia e fechado) tem de estar no mapa, escrito igual."""
+    m_ = re.search(r"var DN_DIST_SUP=\{(.*?)\};", html)
+    mapa = set(re.findall(r'"([^"]*)":"', m_.group(1))) if m_ else set()
+    nomes = set(json.loads(gzip.decompress(base64.b64decode(J["pdv_blob_comb"]["b64"])))["dists"])
+    faltam = sorted(nomes - mapa)
+    return not faltam, (f"{len(nomes)} distribuidores na lista, todos no mapa ({len(mapa) - 1} no mapa)" if not faltam else f"fora do mapa: {faltam[:5]}")
+
+
 def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
     L.etapa_inicio("4 · validar")
     erros: list[str] = []
@@ -338,9 +348,19 @@ def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
         com_linha = set(f.loc[f["ANO_MES"] == mes_ref, "DIST"].astype(str))
         no_json = {d["cnpj"] for d in J["distribuidores"]}
         fora = c["dist"][~c["dist"]["DIST_ID"].astype(str).isin(com_linha)]
-        ok("distribuidores no painel", no_json == com_linha and (fora["SEGMENTO_ID"] == "sem_venda").all(),
-           f"{n_dist} com linha em {mes_ref} = {len(com_linha)} · {len(fora)} sem linha no mes, todos Sem venda "
-           f"(de {n_dist_esperado} do painel)")
+        # RN-14 (28/10/2026, 3A): quem parou ha 1 ou 2 meses ainda nao e Sem venda (prazo de segmento_sem_venda_meses) e nao
+        # reprova mais a validacao: vira aviso com o nome e ha quantos meses parou
+        parou = {}
+        for r_ in fora[fora["SEGMENTO_ID"] != "sem_venda"].itertuples():
+            ult_ = max((m_ for m_ in c["vendas_dist"].get(str(r_.DIST_ID), set()) if m_ < mes_ref), default=None)
+            parou[str(r_.DISTRIBUIDOR_MTRIX)] = None if ult_ is None else metrics.meses_entre(ult_, mes_ref) - 1
+        recente = all(v is not None and 1 <= v < metrics.SEM_VENDA_MESES for v in parou.values())
+        ok("distribuidores no painel", no_json == com_linha and recente,
+           f"{n_dist} com linha em {mes_ref} = {len(com_linha)} · {len(fora)} sem linha no mes: {len(fora) - len(parou)} Sem venda"
+           + (f", {len(parou)} parou ha 1-2 meses (aviso)" if parou else "") + f" (de {n_dist_esperado} do painel)")
+        if parou:
+            log(f"{len(parou)} distribuidor(es) sem venda em {mes_ref} que ainda nao sao Sem venda (prazo de {metrics.SEM_VENDA_MESES} meses): "
+                + " · ".join(f"{k} (parou ha {v} mes(es))" for k, v in parou.items()), "aviso")
 
     # RTM: os estados somam a base
     r = J["rtm"]
@@ -403,6 +423,29 @@ def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
     rs_fato = float(f[(f["ANO_MES"] == mes_ref) & (f["PESO_KG"] > 0)]["RECEITA"].sum())
     ok("blob de PDVs · R$ do mes", abs(rs_cur - rs_fato) <= tol_rs and abs(rs_blob - rs_cur) <= 0.5 * n_rs + 1,
        f"blob R$ {rs_blob:,.0f} ~ curated R$ {rs_cur:,.2f} = fato R$ {rs_fato:,.2f} ({n_rs:,} pares com R$)")
+
+    # RN-08 (28/10/2026, B2): par sem compra cujo PDV comprou de outro distribuidor do canal = recalculo na fato, no mes de
+    # referencia e no mes fechado (curated, blob e fato contam o mesmo)
+    for m_o, T_o, J_o in [(mes_ref, T, J)] + ([(c["_c2"]["mes_ref"], c["_T2"], c["_J2"])] if c.get("_J2") is not None else []):
+        pb_o = T_o["DN_PDV_BASE_ATIVA"]; sem_o = ~pb_o["positivado_mes"].astype(bool)
+        pos_o = set(f.loc[(f["PESO_KG"] > 0).to_numpy() & (f["ANO_MES"] == m_o).to_numpy(), "COD_PDV"].astype(str))
+        esp_o = int((sem_o & pb_o["COD_PDV"].astype(str).isin(pos_o)).sum()); cur_o = int(pb_o["comprou_outro_mes"].astype(bool).sum())
+        d_o = d if J_o is J else json.loads(gzip.decompress(base64.b64decode(J_o["pdv_blob"]["b64"])).decode("utf-8"))
+        i_o = d_o["cols"].index("outro")
+        blob_o = sum(int(r_[i_o] or 0) for r_ in d_o["rows"])
+        ok(f"pdv · comprou de outro = fato ({m_o})", esp_o == cur_o == blob_o,
+           f"{cur_o:,} pares (curated) = {esp_o:,} (fato) = {blob_o:,} (blob) de {int(sem_o.sum()):,} pares sem compra")
+
+    ok("pdv · todo distribuidor da lista tem supervisor no mapa", *_dist_sup_no_mapa(html, J))   # RN-44 (28/10/2026, 2A)
+    # RN-18 (28/10/2026): coluna Cluster da lista = de-para aplicado ao Segmento do PDV (contagem de pares por cluster)
+    mapa_v = c.get("cluster_mapa") or {}
+    seg_v = T["DN_PDV_BASE_ATIVA"][["COD_PDV"]].astype(str).merge(c["pdv"][["COD_PDV", "SEGMENTO_MTRIX"]].astype(str), on="COD_PDV", how="left")["SEGMENTO_MTRIX"]
+    esp_cl = seg_v.map(lambda x: mapa_v.get(x, x) if isinstance(x, str) and x not in ("", "nan", "<NA>", "None") else "").value_counts().to_dict()
+    i_cl = d["cols"].index("cluster")
+    got_cl = pd.Series([d["clusters"][r_[i_cl]] for r_ in d["rows"]]).value_counts().to_dict()
+    ok("pdv · cluster da lista = de-para", esp_cl == got_cl,
+       f"{len(got_cl)} clusters na lista ({len(mapa_v)} segmentos no de-para) · {len(d['rows']):,} pares" if esp_cl == got_cl
+       else f"divergentes: {sorted(set(esp_cl.items()) ^ set(got_cl.items()))[:4]}")
 
     # F7 (RN-38): mascara PDV x categoria embutida no blob = curated (bits) e dentro do limite
     if "mascara" in d["cols"]:
@@ -489,6 +532,20 @@ def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
             rec = (float(q["volume_kg"]) / float(tcm.loc[ly, "volume_kg"]) - 1) * 100
             if abs(rec - float(p["volume_var_ly"])) > 0.011: difs.append(f"{p['mes']} volume vs LY: {p['volume_var_ly']} x {rec:.2f}")
     ok("serie · Δ do JSON = curated = recalculo", not difs, f"{len(vars_)} comparativos x {len(J['dn']['serie'])} meses do canal" if not difs else "; ".join(difs[:3]))
+    # RN-21 (28/10/2026): vs mes anterior e L3M pelo mes do CALENDARIO, no cubo com mais buracos (distribuidor x categoria):
+    # linha sem o mes anterior no grupo = nulo; com ele = (positivados / positivados do mes anterior - 1) x 100
+    dc_ = T["DN_DISTRIBUIDOR_CAT_MES"][["DIST", "CAT", "ANO_MES", "positivados", "cobertura_var_mes_anterior", "cobertura_var_l3m"]].copy()
+    for c_ in ("DIST", "CAT", "ANO_MES"):
+        dc_[c_] = dc_[c_].astype(str)
+    um_ = {m_: f"{(metrics._idx(m_) + 1) // 12:04d}-{(metrics._idx(m_) + 1) % 12 + 1:02d}" for m_ in dc_["ANO_MES"].unique()}
+    ref_ = dc_[["DIST", "CAT", "ANO_MES", "positivados"]].assign(ANO_MES=lambda x: x["ANO_MES"].map(um_)).rename(columns={"positivados": "_ant"})
+    dc_ = dc_.merge(ref_, on=["DIST", "CAT", "ANO_MES"], how="left")
+    esp_ = (dc_["positivados"] / dc_["_ant"].replace(0, np.nan) - 1) * 100
+    ruim_ = ~(((esp_.isna()) & dc_["cobertura_var_mes_anterior"].isna()) | ((esp_ - dc_["cobertura_var_mes_anterior"]).abs() <= 1e-9))
+    ruim_l3_ = dc_["_ant"].isna() & dc_["cobertura_var_l3m"].notna()   # sem o mes anterior nao ha L3M completo
+    ok("comparativos · mes anterior e L3M pelo calendario", not ruim_.any() and not ruim_l3_.any(),
+       f"{len(dc_):,} linhas distribuidor x categoria · {int(dc_['_ant'].isna().sum()):,} sem o mes anterior no grupo (= —)"
+       if not ruim_.any() and not ruim_l3_.any() else f"{int(ruim_.sum())} linhas com vs mes ant. fora do calendario · {int(ruim_l3_.sum())} L3M sem o mes anterior")
     # F5 (RN-25): serie sem buraco de mes; acumulados = soma da serie; periodo incompleto = nulo; LY por juncao;
     # ano a ano (DN_ACUM_ANO) = cubos + recalculo dos PDVs distintos na fato
     def _mes_mais(am, k):

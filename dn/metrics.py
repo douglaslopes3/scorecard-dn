@@ -31,7 +31,8 @@ referência e vale para a série inteira.
 
 Comparativos: vs mês anterior, vs média dos 3 meses anteriores (só com os 3
 presentes), vs mesmo mês do ano anterior (pela DIM_CALENDARIO.ANO_MES_LY;
-nulo se o mês não existe na série). Variação % para cobertura e volume,
+nulo se o mês não existe na série). Mês anterior e L3M por junção no mês do
+calendário (28/10/2026, RN-21): grupo sem linha naquele mês = nulo. Variação % para cobertura e volume,
 pontos percentuais para o % de cobertura.
 """
 from __future__ import annotations
@@ -271,8 +272,10 @@ def carregar(mes_ref: str | None = None) -> dict:
     f["CLUSTER"] = _mapear_cat(f["COD_PDV"], seg_pdv)
     f = f.drop(columns=["COD_PRODUTO"]).rename(columns={"CNPJ_DISTRIBUIDOR": "DIST"})
     f = frequencia_alocar(f, calib)
+    # RN-18 (28/10/2026): o de-para Segmento Mtrix -> cluster tambem vale para a coluna Cluster da lista de PDVs (painel.montar)
     return {"fato": f, "dist": d, "pdv": dim_pdv, "prod": dim_prod, "cal": dim_cal,
-            "meses": meses, "mes_ref": mes_ref, "freq_calib": calib, "vendas_dist": vendas}
+            "meses": meses, "mes_ref": mes_ref, "freq_calib": calib, "vendas_dist": vendas,
+            "cluster_mapa": {} if clu is None else {str(k): str(v) for k, v in clu.set_index("SEGMENTO_MTRIX")["CLUSTER"].items()}}
 
 
 def segmento_ids(d: pd.DataFrame, mes: str, meses: list[str], vendas: dict) -> np.ndarray:
@@ -456,22 +459,25 @@ def comparativos(s: pd.DataFrame, G: list[str], cal: pd.DataFrame) -> pd.DataFra
     s = s.sort_values(G + ["ANO_MES"]).copy()
     ly = cal.set_index("ANO_MES")["ANO_MES_LY"]
     s["ANO_MES_LY"] = s["ANO_MES"].map(ly)
-    g = s.groupby(G) if G else None
+    mapa_k = {k: {m: f"{(_idx(m) + k) // 12:04d}-{(_idx(m) + k) % 12 + 1:02d}" for m in s["ANO_MES"].unique()} for k in (1, 2, 3)}
 
-    def shifted(col, k):
-        return g[col].shift(k) if G else s[col].shift(k)
+    def anterior(col, k):
+        """RN-21 (28/10/2026): valor do mesmo grupo k meses antes, por juncao no mes do calendario (antes: shift, que pulava os
+        meses sem linha do grupo). Mes sem linha no grupo = nulo."""
+        ref = s[G + ["ANO_MES", col]].rename(columns={col: "_v"})
+        ref["ANO_MES"] = ref["ANO_MES"].map(mapa_k[k]).astype(s["ANO_MES"].dtype)   # a linha do mes m vira a referencia do mes m + k
+        return pd.Series(s[G + ["ANO_MES"]].merge(ref, on=G + ["ANO_MES"], how="left")["_v"].values, index=s.index)
 
     for col, nome, pp in (("positivados", "cobertura", False), ("pct_cobertura", "pct_cobertura", True),
                           ("volume_kg", "volume", False), ("receita_rs", "receita", False),
                           ("frequencia", "frequencia", False)):   # RN-58: variacao % da frequencia de compra
-        prev = shifted(col, 1)
-        l3 = pd.concat([shifted(col, k) for k in (1, 2, 3)], axis=1)
+        prev = anterior(col, 1)
+        l3 = pd.concat([anterior(col, k) for k in (1, 2, 3)], axis=1)
         l3m = l3.mean(axis=1).where(l3.notna().all(axis=1))
         # LY por juncao com o proprio DataFrame (nunca por deslocamento de posicao)
         chave = G + ["ANO_MES"]
         ref = s[chave + [col]].rename(columns={"ANO_MES": "ANO_MES_LY", col: "_ly"})
         lyv = s[G + ["ANO_MES_LY"]].merge(ref, on=G + ["ANO_MES_LY"], how="left")["_ly"].values
-        # a janela do mes anterior/L3M so vale se esses meses sao consecutivos na serie
         for suf, refv in (("mes_anterior", prev), ("l3m", l3m), ("ly", pd.Series(lyv, index=s.index))):
             if pp:
                 s[f"{nome}_var_{suf}"] = s[col] - refv
@@ -1022,12 +1028,14 @@ def _f(v):
         pass
     return float(v)
 
-def pdvs_base_ativa(f: pd.DataFrame, meses: list[str], mes_ref: str) -> pd.DataFrame:
+def pdvs_base_ativa(f: pd.DataFrame, meses: list[str], mes_ref: str, pos_canal: set | None = None) -> pd.DataFrame:
     """Um registro por distribuidor × PDV da base ativa do mês de referência
     (positivado em algum mês da janela), com a leitura de oportunidade:
     positivou no mês? no mês anterior? quantos meses na janela? último mês e
     kg do último mês? kg na janela? E, desde a F1 (RN-06), o R$ do sell-through
-    nas mesmas linhas: rs_mes, rs_ultimo_mes, rs_janela."""
+    nas mesmas linhas: rs_mes, rs_ultimo_mes, rs_janela.
+    RN-08 (28/10/2026, B2): `pos_canal` = PDVs positivados no CANAL no mês (no painel por usuário vem do canal; sem ele, sai
+    da própria `f`), para marcar o par sem compra cujo PDV comprou de outro distribuidor (`comprou_outro_mes`)."""
     i = meses.index(mes_ref)
     if i < JANELA - 1:
         abortar(f"o mes de referencia {mes_ref} nao tem janela de {JANELA} meses completa")
@@ -1047,6 +1055,8 @@ def pdvs_base_ativa(f: pd.DataFrame, meses: list[str], mes_ref: str) -> pd.DataF
     out = out.merge(atual, on=["DIST", "COD_PDV"], how="left")
     # 22/09/2026 (Douglas): o minimo de atendimentos por PDV no mes (RN-58, decisao 2, coluna nf_min_mes) saiu do blob; NF_MIN segue nos cubos
     out["positivado_mes"] = out["kg_mes"].notna()
+    pc = pos_canal if pos_canal is not None else set(m.loc[m["ANO_MES"] == mes_ref, "COD_PDV"].astype(str))
+    out["comprou_outro_mes"] = ~out["positivado_mes"] & out["COD_PDV"].astype(str).isin(pc)
     ant = set(map(tuple, m.loc[m["ANO_MES"] == meses[i - 1], ["DIST", "COD_PDV"]].values)) if i >= 1 else set()
     out["positivado_mes_anterior"] = [(a, b) in ant for a, b in zip(out["DIST"], out["COD_PDV"])]
     ly_m = f"{int(mes_ref[:4]) - 1}-{mes_ref[5:7]}"
@@ -1386,7 +1396,7 @@ def calcular(c: dict) -> dict:
     out["DN_ACUM_ANO"] = acum_ano(c)
     log(f"DN_ACUM_ANO: {len(out['DN_ACUM_ANO']):,} linhas (civil + fiscal x anos da serie x niveis)", "ok")
     out.update(rtm_aderencia(c))
-    out["DN_PDV_BASE_ATIVA"] = pdvs_base_ativa(f, meses, mes_ref)
+    out["DN_PDV_BASE_ATIVA"] = pdvs_base_ativa(f, meses, mes_ref, (c.get("pdv_pos_canal") or {}).get(mes_ref))   # RN-08 (B2)
     out["DN_PDV_CARTEIRA"] = carteira(c, out["DN_PDV_BASE_ATIVA"])   # RN-56
     log(f"DN_PDV_BASE_ATIVA ({mes_ref}): {len(out['DN_PDV_BASE_ATIVA']):,} pares distribuidor x PDV", "ok")
     out.update(penetracao(c, out))   # F6: benchmark, lojas a positivar, potencial, mascara (mes fechado)

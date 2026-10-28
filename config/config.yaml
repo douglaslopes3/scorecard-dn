@@ -687,7 +687,8 @@ painel:
         - ["Base ativa", "PDVs positivados em pelo menos um dos últimos {janela} meses", "denominador do DN"]
         - ["Cobertura", "PDVs positivados no mês", "PDVs compradores"]
         - ["% de cobertura (DN)", "cobertura ÷ base ativa × 100", ""]
-        - ["Sem compra no mês", "base ativa − cobertura", ""]
+        - ["PDVs sem compra no mês", "base ativa − cobertura", "PDVs distintos que não compraram de nenhum distribuidor"]
+        - ["Pares sem compra no mês", "pares distribuidor × PDV da base ativa sem compra no mês (lista de Pontos de venda)", "não comprou de ninguém · comprou de outro distribuidor do canal; o PDV atendido por mais de um distribuidor aparece uma vez por distribuidor"]   # RN-08 (28/10/2026, B2)
     - tema: "Volume e valor"
       itens:
         - ["Volume", "soma do sell-out em kg ÷ 1.000", "toneladas"]
@@ -728,7 +729,7 @@ painel:
       itens:
         - ["PDV em mais de um distribuidor", "conta em cada distribuidor e uma vez no canal, no segmento e no supervisor", ""]
         - ["Supervisor", "N3 da hierarquia de hoje, aplicado a toda a série", ""]
-        - ["Segmento", "Base atual: mais de {novos} meses de histórico e venda nos últimos {sem_venda} meses · Novos: até {novos} meses · Sem venda: nenhum kg vendido nos últimos {sem_venda} meses (o histórico deles continua no canal)", ""]
+        - ["Segmento", "Base atual: mais de {novos} meses de histórico e venda nos últimos {sem_venda} meses · Novos: até {novos} meses · Sem venda: nenhum kg vendido nos últimos {sem_venda} meses (o histórico deles continua no canal)", "o segmento é o do mês de referência, aplicado a toda a série: no gráfico, \"sem venda (hoje)\" são as compras antigas de quem parou"]   # RN-14 (28/10/2026, 1A)
         - ["Mês parcial", "mês em andamento, com os dados da última leitura das bases", "comparativos contra meses cheios"]
         - ["Histórico", "últimos {janela_arq} meses da Mtrix", ""]
         - ["Carteira de PDVs ponderados", "linhas da planilha ponderada válidas pela regra de CNPJ", "Destaque e Prime"]
