@@ -128,6 +128,11 @@ Cor nova no template precisa entrar no `MAPA` de `identidade.py`. `identidade.at
 
 ## Changelog
 
+- **28/10/2026 ~12h25 · D-90, auditoria do painel** — 18 painéis por usuário + cópia do N1 (md5 do canal `6a1f9bcc…`, 19/19 conferidos).
+  Card "PDVs sem compra no mês" e lista de PDVs por par com "não comprou de ninguém" × "comprou de outro distribuidor" (RN-08/RN-64);
+  segmento Sem venda dito na tela, mapa distribuidor → supervisor completo e parada de 1–2 meses como aviso na validação (RN-14/RN-44);
+  vs mês anterior e L3M pelo mês do calendário (RN-21); Cluster da lista pelo de-para (RN-18); número da barra = total do nível (RN-47).
+  Card, DN e cubos do canal inalterados. Detalhe em `docs/RETOMADA.md` §0e–§0g.
 - **16/09/2026 07h16 · publicação** — canal (`Painéis Comerciais/DN`, md5 `e6519850…`) e os 18 painéis por usuário
   (`Painéis Comerciais/Gerencial/<rótulo>/`), com o de-para de nomes reduzidos do Douglas. Aba Pontos de venda: abre em Todos os PDVs
   (`painel.pdv_carteira.padrao`) e o filtro Situação fica só com Todos · Sem compra · Positivados · Clientes RTM

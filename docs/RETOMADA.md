@@ -1,6 +1,6 @@
 # RETOMADA · Scorecard DN — leia isto primeiro
 
-Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em **14/09/2026** (estabilização após o checklist) em **15/09/2026** (limite do HTML, PELLAH; à noite, Etapa 1 de performance) em **16/09/2026** (Etapa 2 publicada, RN-60 a RN-64, aba Pontos de venda, limpeza da pasta) em **22/09/2026** (CSV sem tags, média por PDV RN-65, distribuidor na Visão Geral; Mtrix de 21/09) e em **02–03/10/2026** (hierarquia e bases comuns, git/GitHub, limpeza — §0).
+Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em **14/09/2026** (estabilização após o checklist) em **15/09/2026** (limite do HTML, PELLAH; à noite, Etapa 1 de performance) em **16/09/2026** (Etapa 2 publicada, RN-60 a RN-64, aba Pontos de venda, limpeza da pasta) em **22/09/2026** (CSV sem tags, média por PDV RN-65, distribuidor na Visão Geral; Mtrix de 21/09) e em **02–03/10/2026** (hierarquia e bases comuns, git/GitHub, limpeza — §0); depois, só seções §0a–§0g no topo, a mais recente de **28/10/2026** (auditoria do painel, D-90 — §0e–§0g).
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
 
