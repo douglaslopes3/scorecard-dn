@@ -434,6 +434,14 @@ def serie_nivel(c: dict, G: list[str], cat: bool = False) -> pd.DataFrame:
         S.columns = ["volume_kg", "receita_rs", "atendimentos", "atendimentos_min"]
         out = pd.concat([positivados, S], axis=1).reset_index()
         out = out.merge(base, on=keys, how="left")
+        if not G:
+            # D-91 (05/11/2026): recorte sem nenhuma venda num mes em que ainda tem base ativa (ex.: mes em andamento so com outros
+            # distribuidores) tambem tem a linha do mes: base ativa cheia e zero nas medidas. Sem ela o card vinha todo nulo.
+            # So no total do recorte: nos demais niveis, grupo sem linha no mes segue "sem linha" (parou != queda, RN-21).
+            sem_venda = base[(base["base_ativa"] > 0) & ~base["ANO_MES"].isin(out["ANO_MES"])]
+            if len(sem_venda):
+                out = pd.concat([out, sem_venda.assign(positivados=0, volume_kg=0.0, receita_rs=0.0, atendimentos=0.0, atendimentos_min=0.0)],
+                                ignore_index=True)
         kc = keys
     else:
         kc = keys + ["CAT"]

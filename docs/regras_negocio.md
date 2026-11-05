@@ -1227,7 +1227,7 @@ Abreviações: **Mtrix** = `bases/Sell Out - MTRIX/ScoreCard_Mtrix_MM.AAAA.xlsx`
 | Filtros aplicáveis | dentro do painel do usuário, os filtros de sempre; o select de supervisor lista só os do recorte |
 | Exceções | rótulos em `distribuicao.ignorar_rotulos` e "SEM HIERARQUIA" não geram painel; recorte sem venda até certo mês recebe o bloco do calendário da `DIM_CALENDARIO`; erro em um usuário não interrompe os demais (`distribuicao.em_erro`: continuar = publica os que passaram e sai com exit 1; abortar_publicacao = gera todos e não publica nenhum; parar) |
 | Nulos | PDVs distintos não somam entre usuários (o mesmo PDV atendido por dois supervisores conta uma vez no canal); kg, R$ e NFs somam |
-| Zeros | recorte sem venda no mês: cards nulos (nunca zero) |
+| Zeros | recorte com base ativa e sem nenhuma venda no mês: o total do recorte mostra a base ativa e zero em positivados, kg, R$ e NFs (DN 0,0%). Com filtro de segmento sem linha no mês e sem base ativa: cards nulos. **05/11/2026 (D-91, decisão do Douglas)**: antes, cards nulos também no total do recorte |
 | Duplicidades | distribuidor pertence a exatamente um supervisor, um gerente e um head |
 | Parametrização | `distribuicao.{ativo, destino, niveis, prefixo, ignorar_rotulos, criar_pasta, em_erro, rotulo_canal, gravar_json}`; pasta = rótulo com `/`→`-`; arquivo `Scorecard_DN_N<n>_<slug>.html`; código `dn/distribuicao.py`, etapa 6 de `pipeline.executar`; `--usuario`, `--sem-usuarios` |
 | Responsável | Douglas |

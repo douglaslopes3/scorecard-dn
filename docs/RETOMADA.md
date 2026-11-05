@@ -1,8 +1,22 @@
 # RETOMADA · Scorecard DN — leia isto primeiro
 
-Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em **14/09/2026** (estabilização após o checklist) em **15/09/2026** (limite do HTML, PELLAH; à noite, Etapa 1 de performance) em **16/09/2026** (Etapa 2 publicada, RN-60 a RN-64, aba Pontos de venda, limpeza da pasta) em **22/09/2026** (CSV sem tags, média por PDV RN-65, distribuidor na Visão Geral; Mtrix de 21/09) e em **02–03/10/2026** (hierarquia e bases comuns, git/GitHub, limpeza — §0); depois, só seções §0a–§0g no topo, a mais recente de **28/10/2026** (auditoria do painel, D-90 — §0e–§0g).
+Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em **14/09/2026** (estabilização após o checklist) em **15/09/2026** (limite do HTML, PELLAH; à noite, Etapa 1 de performance) em **16/09/2026** (Etapa 2 publicada, RN-60 a RN-64, aba Pontos de venda, limpeza da pasta) em **22/09/2026** (CSV sem tags, média por PDV RN-65, distribuidor na Visão Geral; Mtrix de 21/09) e em **02–03/10/2026** (hierarquia e bases comuns, git/GitHub, limpeza — §0); depois, só seções §0a–§0g no topo, a mais recente de **05/11/2026** (recorte sem venda no mês, D-91 — §0h).
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
+
+## 0h. Recorte sem venda no mês: card com base ativa e zero (05/11/2026, D-91, RN-60)
+
+- Origem: Mtrix de nov/26 com 726 linhas, só 7 de 81 distribuidores com venda. A execução 20261105-084137-8cdb1b reprovou 11 de 18 usuários em
+  `card · base ativa = fato do recorte` (`None = 47394`): o recorte sem nenhuma venda no mês não tinha a linha do mês em `DN_CANAL_MES`, então o card vinha nulo.
+  Os 7 restantes foram publicados naquela execução; os 11 ficaram com o arquivo de 30/10.
+- Mudou: `metrics.serie_nivel`, só no total do recorte (`G` vazio), cria a linha do mês com base ativa > 0 e sem venda (positivados, kg, R$ e NFs = 0).
+  Card: base ativa cheia, DN 0,0%, sem compra = base; acumulado do ano passa a existir no mês. Medido antes: o único mês nessa condição é nov/26, nos mesmos 11 usuários.
+- Não mudou: distribuidor, supervisor, cluster e segmento seguem sem linha no mês sem venda (parou ≠ queda, RN-21). Por isso, em nov/26, o filtro de segmento
+  sem venda mostra "-", como já acontece no canal com Novos e Sem venda.
+- Conferido (execução 20261105-091423-f38c3d, `--sem-publicar`): 18 usuários sem erro; somas N2 e N3 = canal; canal (md5 `485fcf0a…`) e os 6 painéis que já passavam com md5 igual;
+  painel 1110 aberto no navegador: nov/26 com 1.684 de base e 0 positivados, out/26 igual ao de antes, sem erro no console.
+- **Decisão do Douglas (05/11/2026)**: manter os zeros. A ficha RN-60 dizia "cards nulos (nunca zero)" para recorte sem venda no mês e foi revisada; a validação não aceitava aquele nulo.
+- **Publicado 05/11/2026 09h47** (execução 20261105-093835-87fccb): 11 painéis substituídos e 7 sem mudança (saíram na execução das 09h01, canal md5 `485fcf0a…`); md5 conferido 18/18 e a cópia em Dashboard - Full.
 
 ## 0g. Comparativos pelo calendário e Cluster da lista pelo de-para (28/10/2026, RN-21/RN-18, itens 2 e 3 da auditoria)
 
