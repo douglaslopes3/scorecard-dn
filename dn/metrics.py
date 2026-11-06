@@ -357,6 +357,17 @@ def frequencia_calibrar(f: pd.DataFrame) -> pd.DataFrame:
         mx, sm = _max_soma(par, n, fq)
         tot = lambda a: float(_uniao(par, fq, mx, a).sum())
         lo, hi = 1.0, amax
+        if mx.sum() > K + tol and mes_em_andamento(str(mes)):
+            # D-92 (06/11/2026): no mes em andamento (poucos dias, quase tudo frequencia 1) o minimo pode passar o total da Mtrix,
+            # que conta uma vez o PDV comprado de 2 distribuidores (ex.: 11111111111 CONSUMIDOR FINAL em nov/26, +1 NF). Fica
+            # alfa = 1 (estimativa = maior valor por par) e o excesso vai como aviso; mes fechado continua abortando (decisao 6).
+            est = tot(1.0)
+            log(f"frequencia (RN-58, D-92): {mes} em andamento — a soma do maior valor por par ({mx.sum():,.0f}) passa o total da Mtrix "
+                f"({K:,.0f}) em {est - K:,.0f} NF; alfa fixado em 1 (sem calibrar)", "aviso")
+            rows.append({"ANO_MES": mes, "atendimentos_total": int(K), "pdvs_distintos": int(g["COD_PDV"].nunique()), "alfa": 1.0,
+                         "soma_max_pares": float(mx.sum()), "soma_linhas": float(sm.sum()), "soma_estimada": est, "erro_nfs": est - K,
+                         "pares": n, "pares_uma_linha": int((np.bincount(par, minlength=n) == 1).sum())})
+            continue
         if mx.sum() > K + tol:
             abortar(f"frequencia (RN-58): {mes} — a soma do maior valor por par ({mx.sum():,.0f}) ja passa o total da Mtrix ({K:,.0f}); nenhum alfa fecha")
         if tot(hi) < K - tol:

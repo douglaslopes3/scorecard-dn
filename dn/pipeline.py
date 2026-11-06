@@ -1194,9 +1194,14 @@ def validar(c: dict, T: dict, J: dict, html: str, alvo: Path) -> dict:
     ok("freq · total x PDVs inteiro", bool(len(GB)) and GB["freq_total"].notna().all() and dist_int <= float(V_["frequencia_tolerancia_inteiro"]),
        f"{len(GB)} arquivo(s): maior distancia ao inteiro {dist_int:.2e} (tolerancia {float(V_['frequencia_tolerancia_inteiro']):g})")
     FC_ = T["DN_FREQ_CALIBRACAO"]
-    err_ = float(FC_["erro_nfs"].abs().max()) if len(FC_) else 0.0
+    # D-92 (06/11/2026): o mes em andamento pode ficar com alfa 1 acima do total (PDV compartilhado conta 1 vez na Mtrix) — so aviso
+    and_ = FC_["ANO_MES"].astype(str).eq(mes_ref) & metrics.mes_em_andamento(mes_ref)
+    err_ = float(FC_.loc[~and_, "erro_nfs"].abs().max()) if (~and_).any() else 0.0
+    nota_ = ""
+    if and_.any() and float(FC_.loc[and_, "erro_nfs"].abs().max()) > float(V_["frequencia_tolerancia_total"]):
+        nota_ = f" · {mes_ref} em andamento fora da conta (erro {float(FC_.loc[and_, 'erro_nfs'].max()):+,.0f} NF, alfa 1, D-92)"
     ok("freq · Σ estimativa = total Mtrix", len(FC_) == len(c["meses"]) and err_ <= float(V_["frequencia_tolerancia_total"]),
-       f"{len(FC_)} meses calibrados · maior erro {err_:.4f} NF · alfa {FC_['alfa'].min():.4f} a {FC_['alfa'].max():.4f}")
+       f"{len(FC_)} meses calibrados · maior erro {err_:.4f} NF · alfa {FC_['alfa'].min():.4f} a {FC_['alfa'].max():.4f}{nota_}")
     fora_ = [f"{r_.ANO_MES} alfa {r_.alfa:.4f}" for r_ in FC_.itertuples()
              if not (float(V_["frequencia_alfa_min"]) <= r_.alfa <= float(V_["frequencia_alfa_max"]))
              and not (r_.ANO_MES == mes_ref and metrics.mes_em_andamento(mes_ref))]

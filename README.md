@@ -128,6 +128,7 @@ Cor nova no template precisa entrar no `MAPA` de `identidade.py`. `identidade.at
 
 ## Changelog
 
+- **06/11/2026 09h22 · D-92, frequência no mês em andamento** — Mtrix de nov/26 (6 dias) abortava na RN-58: um PDV genérico (11111111111 CONSUMIDOR FINAL) em 2 distribuidores deixava o mínimo 1 NF acima do total da Mtrix. No mês em andamento passa a valer α = 1 com aviso; mês fechado segue abortando. 18 painéis publicados (md5 do canal `7c0f8ade…`, 18/18 conferidos). Detalhe em `docs/RETOMADA.md` §0i.
 - **05/11/2026 09h47 · D-91, recorte sem venda no mês** — usuário sem nenhuma venda no mês agora mostra a base ativa e zero no total do recorte, em vez de card nulo que reprovava a validação (RN-60 revisada). 11 painéis publicados, 7 sem mudança (md5 do canal `485fcf0a…`, 18/18 conferidos). Detalhe em `docs/RETOMADA.md` §0h.
 - **28/10/2026 ~12h25 · D-90, auditoria do painel** — 18 painéis por usuário + cópia do N1 (md5 do canal `6a1f9bcc…`, 19/19 conferidos).
   Card "PDVs sem compra no mês" e lista de PDVs por par com "não comprou de ninguém" × "comprou de outro distribuidor" (RN-08/RN-64);

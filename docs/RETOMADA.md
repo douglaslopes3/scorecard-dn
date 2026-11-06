@@ -1,8 +1,23 @@
 # RETOMADA · Scorecard DN — leia isto primeiro
 
-Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em **14/09/2026** (estabilização após o checklist) em **15/09/2026** (limite do HTML, PELLAH; à noite, Etapa 1 de performance) em **16/09/2026** (Etapa 2 publicada, RN-60 a RN-64, aba Pontos de venda, limpeza da pasta) em **22/09/2026** (CSV sem tags, média por PDV RN-65, distribuidor na Visão Geral; Mtrix de 21/09) e em **02–03/10/2026** (hierarquia e bases comuns, git/GitHub, limpeza — §0); depois, só seções §0a–§0g no topo, a mais recente de **05/11/2026** (recorte sem venda no mês, D-91 — §0h).
+Reescrito em **13/09/2026**, ao fim do refino do painel (E1–E6), atualizado em **14/09/2026** (estabilização após o checklist) em **15/09/2026** (limite do HTML, PELLAH; à noite, Etapa 1 de performance) em **16/09/2026** (Etapa 2 publicada, RN-60 a RN-64, aba Pontos de venda, limpeza da pasta) em **22/09/2026** (CSV sem tags, média por PDV RN-65, distribuidor na Visão Geral; Mtrix de 21/09) e em **02–03/10/2026** (hierarquia e bases comuns, git/GitHub, limpeza — §0); depois, só seções §0a–§0g no topo, a mais recente de **06/11/2026** (frequência no mês em andamento, D-92 — §0i).
 Serve para qualquer pessoa ou IA retomar o trabalho sem a conversa anterior. O histórico completo (reforma, evolução F0–F11,
 frequência) está nos documentos da §7; esta página traz só o que vale hoje.
+
+## 0i. Frequência no mês em andamento: α = 1 quando o mínimo passa o total (06/11/2026, D-92, RN-58)
+
+- Origem: execução 20261106-085041-3e40a2 abortou na etapa 2 — `frequencia (RN-58): 2026-11 — a soma do maior valor por par (1,112) ja passa o
+  total da Mtrix (1,111); nenhum alfa fecha`. Mtrix de nov/26 com 7.798 linhas (6 dias), 7.792 com frequência 1.
+- Causa medida: um único PDV em 2 distribuidores no mês, o código genérico `11111111111` CONSUMIDOR FINAL (Contagem/MG) em DIN e CARVALHO JUNIOR.
+  O pipeline conta 1 atendimento por par; a Mtrix conta o PDV uma vez (Σ maior valor por PDV = 1.111 = total). Nos 26 meses fechados há 266 a 1.603
+  PDVs em mais de um distribuidor, mas o total fica 3.949 a 8.411 NFs acima do mínimo e o α (1,088 a 1,134) absorve; com 6 dias a folga some.
+- Mudou: `metrics.frequencia_calibrar` — mês em andamento com Σ max por par > total: α = 1 (estimativa = maior valor por par), aviso no log com o
+  excesso, sem abortar. `pipeline` (validação `freq · Σ estimativa = total Mtrix`) deixa esse mês fora da conta do erro e o cita no detalhe.
+- Não mudou: mês fechado com o mesmo quadro continua abortando (decisão 6).
+- Conferido (execução 20261106-085855-44c9d9, `--sem-publicar`): validações ok; `freq · Σ estimativa = total Mtrix` com erro 0 nos 26 meses fechados e nov/26 citado à parte (+1 NF);
+  Σ distribuidores = canal 1.112 NFs; 18 usuários sem erro; somas N2 e N3 = canal.
+- **Decisão do Douglas (06/11/2026)**: aplicar a exceção no mês em andamento.
+- **Publicado 06/11/2026 09h22** (execução 20261106-091333-d553be): 18 painéis publicados, md5 conferido 18/18; canal e cópia em Dashboard - Full com md5 `7c0f8ade…`.
 
 ## 0h. Recorte sem venda no mês: card com base ativa e zero (05/11/2026, D-91, RN-60)
 

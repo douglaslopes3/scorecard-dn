@@ -217,6 +217,8 @@ validacao:
   # RN-58: calibração da frequência. Não calibra = aborta (decisão 6): total x PDVs distintos longe de inteiro, frequência do
   # total ausente ou nenhum alfa fecha o total. Alfa fora da faixa = só aviso (medido: 1,088 a 1,134 em 24 meses fechados);
   # mês em andamento não é checado contra a faixa.
+  # D-92 (06/11/2026): no mês em andamento, se a soma do maior valor por par já passa o total (PDV comprado de 2 distribuidores
+  # conta 1 vez na Mtrix), alfa = 1 sem calibrar e o excesso vai como aviso; mês fechado segue abortando.
   frequencia_tolerancia_inteiro: 0.000001   # |freq_total x PDVs distintos − inteiro| (medido: ≤ 4,4e-11)
   frequencia_tolerancia_total: 0.5          # |Σ estimativa dos pares − atendimentos do total| em NFs após a calibração
   frequencia_alfa_min: 1.05
